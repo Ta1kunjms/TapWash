@@ -17,7 +17,9 @@ export type DeliveryStatus = "assigned" | "picked_up" | "in_transit" | "delivere
 
 export interface Profile {
   id: string;
-  full_name: string;
+  first_name: string | null;
+  surname: string | null;
+  username: string | null;
   role: UserRole;
   phone: string | null;
   address: string | null;

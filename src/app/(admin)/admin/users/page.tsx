@@ -11,7 +11,7 @@ export default async function AdminUsersPage() {
       <h1 className="text-2xl font-bold">Manage Users</h1>
       {users.map((user) => (
         <Card key={user.id}>
-          <p className="font-semibold">{user.full_name}</p>
+          <p className="font-semibold">{user.displayName}</p>
           <p className="text-sm text-text-secondary">{user.role}</p>
           <p className="text-xs text-text-muted">Status: {user.is_suspended ? "Suspended" : "Active"}</p>
           <form action={suspendUserAction} className="mt-3">

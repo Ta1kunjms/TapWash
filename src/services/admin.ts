@@ -14,11 +14,14 @@ export async function listUsers() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role, is_suspended, created_at")
+    .select("id, first_name, surname, role, is_suspended, created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data;
+  return (data ?? []).map((user) => ({
+    ...user,
+    displayName: [user.first_name, user.surname].filter(Boolean).join(" ").trim() || "Unnamed User",
+  }));
 }
 
 export async function setUserSuspended(userId: string, isSuspended: boolean) {
