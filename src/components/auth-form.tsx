@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { notify } from "@/lib/notify";
 import { roleToPath } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/types/domain";
@@ -9,7 +10,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 import brandAsset from "../../Logo/Asset 16@300x.png";
 
 type Mode = "signin" | "signup" | "forgot-password";
@@ -48,13 +48,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
           .single<{ role: UserRole }>();
 
         const nextPath = profile ? roleToPath(profile.role) : "/customer";
-        toast.success("Welcome back");
+        notify.success("Welcome back");
         router.replace(nextPath);
       }
 
       if (mode === "signup") {
         if (password !== confirmPassword) {
-          toast.error("Passwords do not match.");
+          notify.error("Passwords do not match.");
           setLoading(false);
           return;
         }
@@ -72,7 +72,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           },
         });
         if (error) throw error;
-        toast.success("Account created. Check your email if confirmation is enabled.");
+        notify.success("Account created. Check your email if confirmation is enabled.");
         router.replace(roleToPath(role));
 
         if (phone.trim()) {
@@ -82,18 +82,18 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
       if (mode === "forgot-password") {
         if (!resetValue.includes("@")) {
-          toast.error("Please enter an email address to reset password.");
+          notify.error("Please enter an email address to reset password.");
           return;
         }
 
         const { error } = await supabase.auth.resetPasswordForEmail(resetValue.trim());
         if (error) throw error;
-        toast.success("Password reset link sent. Please check your email.");
+        notify.success("Password reset link sent. Please check your email.");
       }
 
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Authentication error");
+      notify.error(error instanceof Error ? error.message : "Authentication error");
     } finally {
       setLoading(false);
     }

@@ -18,9 +18,14 @@ export async function createClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            // Server Component renders may call auth APIs that attempt to rotate cookies.
+            // Cookie writes are only legal in Server Actions/Route Handlers; middleware handles refresh.
+          }
         },
       },
     },

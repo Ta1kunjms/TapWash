@@ -3,11 +3,12 @@ import { getCustomerProfile } from "@/services/customer";
 
 export default async function CustomerSettingsPage() {
   const profile = await getCustomerProfile();
+  const fullName = [profile?.first_name, profile?.surname].filter(Boolean).join(" ") || "Tycoon James Flores";
 
   return (
     <main>
       <SettingsMenu
-        fullName={profile?.fullName ?? "Tycoon James Flores"}
+        fullName={fullName}
         email={profile?.email || "tycoonjames.flores@msugensan.edu.ph"}
       />
     </main>

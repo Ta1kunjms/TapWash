@@ -1,7 +1,8 @@
 "use client";
 
-import { Toaster } from "sonner";
+import { Toaster } from "sileo";
+import "sileo/styles.css";
 
 export function ToastProvider() {
-  return <Toaster richColors position="top-center" />;
+  return <Toaster position="top-center" />;
 }

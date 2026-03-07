@@ -11,10 +11,6 @@ export default async function CustomerProfilePage({
 }) {
   const { saved } = await searchParams;
   const profile = await getCustomerProfile();
-  const fullName = profile?.fullName ?? "Tycoon James Flores";
-  const nameParts = fullName.split(" ");
-  const firstName = nameParts.slice(0, -1).join(" ") || fullName;
-  const lastName = nameParts.at(-1) ?? "";
 
   async function updateProfileAction(formData: FormData) {
     "use server";
@@ -28,15 +24,16 @@ export default async function CustomerProfilePage({
       redirect("/login");
     }
 
-    const first = String(formData.get("firstName") ?? "").trim();
-    const last = String(formData.get("lastName") ?? "").trim();
+    const first_name = String(formData.get("first_name") ?? "").trim();
+    const surname = String(formData.get("surname") ?? "").trim();
     const phone = String(formData.get("phone") ?? "").trim();
     const address = String(formData.get("address") ?? "").trim();
 
     await supabase
       .from("profiles")
       .update({
-        full_name: `${first} ${last}`.trim() || first || "Customer",
+        first_name: first_name || null,
+        surname: surname || null,
         phone: phone || null,
         address: address || null,
       })
@@ -47,13 +44,15 @@ export default async function CustomerProfilePage({
     redirect("/customer/settings/profile?saved=1");
   }
 
+  const fullName = [profile?.first_name, profile?.surname].filter(Boolean).join(" ").trim() || "Customer";
+
   return (
     <main className="space-y-4 pb-2">
       <SubPageHeader title="My Profile" />
 
       <section className="text-center">
         <div className="mx-auto mb-2 flex h-20 w-20 items-center justify-center rounded-full border-2 border-primary-500 bg-white text-xl font-bold text-primary-500">
-          {getInitials(fullName) || "TW"}
+          {getInitials(profile?.first_name ?? null, profile?.surname ?? null) || "TW"}
         </div>
         <h1 className="text-2xl font-bold text-text-secondary">{fullName}</h1>
         <p className="text-sm text-text-muted">@{(profile?.email ?? "customer").split("@")[0]}</p>
@@ -63,13 +62,13 @@ export default async function CustomerProfilePage({
       <form action={updateProfileAction} className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <input
-            name="firstName"
-            defaultValue={firstName}
+            name="first_name"
+            defaultValue={profile?.first_name ?? ""}
             className="h-11 rounded-xl border border-border-muted bg-white px-3 text-sm text-primary-500"
           />
           <input
-            name="lastName"
-            defaultValue={lastName}
+            name="surname"
+            defaultValue={profile?.surname ?? ""}
             className="h-11 rounded-xl border border-border-muted bg-white px-3 text-sm text-primary-500"
           />
         </div>

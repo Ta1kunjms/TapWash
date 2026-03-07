@@ -1,4 +1,5 @@
 import { ORDER_TRANSITIONS } from "@/lib/constants";
+import { calculateServiceEstimate, normalizePricingService } from "@/lib/pricing";
 import { createClient } from "@/lib/supabase/server";
 import { bookOrderSchema, updateOrderStatusSchema } from "@/lib/validators/order";
 import { applyVoucher, createMockPaymentIntent } from "@/services/checkout";
@@ -18,7 +19,9 @@ export async function createOrder(input: unknown) {
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("price_per_kg, shop_id")
+    .select(
+      "shop_id, name, description, pricing_model, unit_price, load_capacity_kg, service_option_groups(id, name, option_type, selection_type, is_required, sort_order, service_options(id, name, description, price_delta, price_type, is_default, sort_order))",
+    )
     .eq("id", parsed.serviceId)
     .single();
 
@@ -26,9 +29,26 @@ export async function createOrder(input: unknown) {
     throw new Error("Invalid service selected");
   }
 
-  const subtotal = service.price_per_kg * parsed.weightEstimate;
+  const { data: shop, error: shopError } = await supabase
+    .from("laundry_shops")
+    .select("shop_name, load_capacity_kg")
+    .eq("id", parsed.shopId)
+    .single();
+
+  if (shopError || !shop) {
+    throw new Error("Laundry shop not found");
+  }
+
+  const normalizedService = normalizePricingService(service);
+  const estimate = calculateServiceEstimate({
+    service: normalizedService,
+    weightKg: parsed.weightEstimate,
+    selectedOptionIds: parsed.selectedOptionIds,
+    shopLoadCapacityKg: shop.load_capacity_kg,
+  });
+  const subtotal = estimate.subtotal;
   const { promoCode, discount } = await applyVoucher(parsed.promoCode, subtotal);
-  const total = subtotal + parsed.deliveryFee - discount;
+  const total = subtotal + parsed.deliveryFee + parsed.tipAmount - discount;
   const paymentIntent = await createMockPaymentIntent(total, parsed.paymentMethod);
 
   const { data, error } = await supabase
@@ -38,13 +58,45 @@ export async function createOrder(input: unknown) {
       shop_id: parsed.shopId,
       service_id: parsed.serviceId,
       weight_estimate: parsed.weightEstimate,
+      selected_option_ids: estimate.selectedOptions.map((option) => option.id),
+      service_snapshot: {
+        name: normalizedService.name,
+        description: normalizedService.description,
+        pricingModel: normalizedService.pricing_model,
+        unitPrice: normalizedService.unit_price,
+        loadCapacityKg: estimate.loadCapacityKg,
+        shopName: shop.shop_name,
+        selectedOptions: estimate.selectedOptions.map((option) => ({
+          id: option.id,
+          name: option.name,
+          optionType: option.option_type,
+          groupName: option.group_name,
+          priceDelta: option.price_delta,
+          priceType: option.price_type,
+        })),
+      },
+      pricing_breakdown: {
+        basePrice: estimate.basePrice,
+        optionsTotal: estimate.optionsTotal,
+        loadCount: estimate.loadCount,
+        loadCapacityKg: estimate.loadCapacityKg,
+        subtotal,
+        deliveryFee: parsed.deliveryFee,
+        tipAmount: parsed.tipAmount,
+        discountAmount: discount,
+        total,
+      },
       total_price: total,
       delivery_fee: parsed.deliveryFee,
       discount_amount: discount,
       status: "pending",
       pickup_date: parsed.pickupDate,
+      delivery_date: parsed.deliveryDate ?? null,
       pickup_address: parsed.pickupAddress,
       dropoff_address: parsed.dropoffAddress,
+      contact_phone: parsed.contactPhone,
+      delivery_instructions: parsed.deliveryInstructions || null,
+      rider_notes: parsed.riderNotes || null,
       pickup_lat: parsed.pickupLat ?? null,
       pickup_lng: parsed.pickupLng ?? null,
       dropoff_lat: parsed.dropoffLat ?? null,
@@ -52,6 +104,7 @@ export async function createOrder(input: unknown) {
       distance_km: parsed.distanceKm ?? null,
       eta_minutes: parsed.etaMinutes ?? null,
       promo_code: promoCode,
+      tip_amount: parsed.tipAmount,
       payment_status: "unpaid",
       payment_method: parsed.paymentMethod,
       payment_reference: paymentIntent?.reference ?? null,
@@ -63,6 +116,12 @@ export async function createOrder(input: unknown) {
   await logOrderEvent(data.id, "order_created", {
     promoCode,
     discount,
+    loadCount: estimate.loadCount,
+    serviceSubtotal: subtotal,
+    optionsTotal: estimate.optionsTotal,
+    selectedOptions: estimate.selectedOptions.map((option) => option.name),
+    tipAmount: parsed.tipAmount,
+    contactPhone: parsed.contactPhone,
     paymentMethod: parsed.paymentMethod,
     paymentReference: paymentIntent?.reference ?? null,
   });

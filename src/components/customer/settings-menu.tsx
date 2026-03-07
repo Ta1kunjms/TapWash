@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { FlaticonIcon } from "@/components/ui/flaticon-icon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -55,10 +56,10 @@ export function SettingsMenu({ fullName, email }: Props) {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="flex w-full items-center justify-between rounded-2xl border border-border-muted bg-surface-card px-4 py-4 shadow-soft"
+            className="flex w-full items-center justify-between rounded-2xl border border-border-muted bg-surface-card px-4 py-4 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
           >
             <span className="flex items-center gap-3 text-sm font-semibold text-primary-500">
-              <span className="text-base">⇥</span>
+              <LogoutIcon />
               Logout
             </span>
             <span className="text-primary-500">›</span>
@@ -69,7 +70,9 @@ export function SettingsMenu({ fullName, email }: Props) {
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-text-primary/50 px-6">
           <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-soft">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary-500/10 text-primary-500">⇥</div>
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary-500/10 text-primary-500">
+              <LogoutIcon />
+            </div>
             <h2 className="text-lg font-bold text-text-secondary">Ready to leave?</h2>
             <p className="mt-1 text-sm text-text-muted">You&apos;re about to sign out of TapWash.</p>
             <div className="mt-4 flex gap-2">
@@ -98,9 +101,12 @@ export function SettingsMenu({ fullName, email }: Props) {
 
 function SettingsLink({ href, label, icon }: { href: string; label: string; icon: "person" | "wallet" | "language" | "help" }) {
   return (
-    <Link href={href} className="flex items-center justify-between rounded-2xl border border-border-muted bg-surface-card px-4 py-4 shadow-soft">
+    <Link
+      href={href}
+      className="flex items-center justify-between rounded-2xl border border-border-muted bg-surface-card px-4 py-4 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
+    >
       <span className="flex items-center gap-3 text-sm font-semibold text-text-secondary">
-        <span className="text-base text-primary-500">{iconSymbol(icon)}</span>
+        <span className="text-primary-500">{iconSymbol(icon)}</span>
         {label}
       </span>
       <span className="text-text-secondary">›</span>
@@ -109,8 +115,19 @@ function SettingsLink({ href, label, icon }: { href: string; label: string; icon
 }
 
 function iconSymbol(icon: "person" | "wallet" | "language" | "help") {
-  if (icon === "person") return "👤";
-  if (icon === "wallet") return "💳";
-  if (icon === "language") return "🌐";
-  return "🛟";
+  if (icon === "person") {
+    return <FlaticonIcon name="user" className="text-base" />;
+  }
+  if (icon === "wallet") {
+    return <FlaticonIcon name="wallet" className="text-base" />;
+  }
+  if (icon === "language") {
+    return <FlaticonIcon name="language" className="text-base" />;
+  }
+
+  return <FlaticonIcon name="question" className="text-base" />;
+}
+
+function LogoutIcon() {
+  return <FlaticonIcon name="sign-out-alt" className="text-base" />;
 }

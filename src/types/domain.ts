@@ -14,6 +14,10 @@ export type OrderStatus =
 export type PaymentStatus = "unpaid" | "partially_paid" | "paid" | "refunded";
 export type PaymentMethod = "cod" | "gcash" | "card";
 export type DeliveryStatus = "assigned" | "picked_up" | "in_transit" | "delivered" | "failed" | "cancelled";
+export type ServicePricingModel = "per_kg" | "per_load";
+export type ServiceOptionType = "detergent" | "fabcon" | "addon";
+export type ServiceOptionSelectionType = "single" | "multiple";
+export type ServiceOptionPriceType = "per_order" | "per_load";
 
 export interface Profile {
   id: string;
@@ -33,18 +37,46 @@ export interface LaundryShop {
   shop_name: string;
   description: string | null;
   location: string;
+  cover_image_url: string | null;
   city_id: string | null;
-  price_per_kg: number;
+  starting_price: number;
+  load_capacity_kg: number;
   commission_percentage: number;
   is_verified: boolean;
   created_at: string;
+}
+
+export interface ServiceOption {
+  id: string;
+  group_id: string;
+  name: string;
+  description: string | null;
+  price_delta: number;
+  price_type: ServiceOptionPriceType;
+  is_default: boolean;
+  sort_order: number;
+}
+
+export interface ServiceOptionGroup {
+  id: string;
+  service_id: string;
+  name: string;
+  option_type: ServiceOptionType;
+  selection_type: ServiceOptionSelectionType;
+  is_required: boolean;
+  sort_order: number;
+  service_options?: ServiceOption[];
 }
 
 export interface ServiceItem {
   id: string;
   shop_id: string;
   name: string;
-  price_per_kg: number;
+  description: string | null;
+  pricing_model: ServicePricingModel;
+  unit_price: number;
+  load_capacity_kg: number | null;
+  service_option_groups?: ServiceOptionGroup[];
 }
 
 export interface Order {
@@ -62,8 +94,15 @@ export interface Order {
   payment_method: PaymentMethod;
   pickup_address: string | null;
   dropoff_address: string | null;
+  contact_phone: string | null;
+  delivery_instructions: string | null;
+  rider_notes: string | null;
   promo_code: string | null;
   discount_amount: number;
+  tip_amount: number;
+  selected_option_ids: string[];
+  service_snapshot: Record<string, unknown>;
+  pricing_breakdown: Record<string, unknown>;
   payment_reference: string | null;
   pickup_lat: number | null;
   pickup_lng: number | null;

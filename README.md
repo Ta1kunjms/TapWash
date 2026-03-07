@@ -23,6 +23,25 @@ Copy `.env.example` to `.env.local` and set:
 - `npm run build` - production build
 - `npm run format` - apply Prettier formatting
 
+## Notifications
+
+- TapWash uses `sileo` globally via `src/components/ui/toast-provider.tsx`.
+- App code should call `notify` from `src/lib/notify.ts` (for `success`, `error`, `info`, etc.).
+- Do not import `sileo` directly in feature components/pages.
+- ESLint enforces this with `no-restricted-imports`, allowing direct `sileo` imports only in:
+	- `src/lib/notify.ts`
+	- `src/components/ui/toast-provider.tsx`
+
+Example usage:
+
+```ts
+import { notify } from "@/lib/notify";
+
+notify.success("Order placed successfully");
+notify.error("Unable to place order right now");
+notify.info({ title: "Dispatch update", description: "Rider assigned and heading to pickup." });
+```
+
 ## Route Groups
 
 - `/(public)` public marketing

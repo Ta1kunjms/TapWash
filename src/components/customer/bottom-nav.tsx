@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { FlaticonIcon } from "@/components/ui/flaticon-icon";
 
 const navItems = [
   { href: "/customer", label: "Home", icon: "home" as const },
@@ -14,14 +16,24 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md px-3 pb-3 md:hidden">
-      <div className="relative overflow-visible rounded-t-3xl border border-border-muted bg-white/95 px-2 pb-2 pt-3 shadow-soft backdrop-blur">
-        <div className="pointer-events-none absolute left-1/2 top-0 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white bg-gradient-to-b from-primary-500 to-primary-500/80 shadow-md" />
-        <div className="pointer-events-none absolute left-1/2 top-0 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-xl">
-          🫧
+    <nav className="fixed inset-x-0 bottom-0 z-50 w-full md:hidden">
+      <div className="relative w-full aspect-[1080/384] max-h-[136px] overflow-visible">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[71%]">
+          <svg className="absolute block h-full w-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1080 273">
+            <path
+              d="M1079 0C1079.55 0 1080 0.447715 1080 1V272C1080 272.552 1079.55 273 1079 273H1C0.447715 273 2.139e-09 272.552 0 272V1C0 0.447715 0.447715 0 1 0H364.284C385.714 0 402.568 17.6434 408.687 38.1816C425.541 94.7523 477.953 136 540 136C602.047 136 654.459 94.7523 671.313 38.1816C677.432 17.6435 694.286 0 715.716 0H1079Z"
+              fill="#F5F5F7"
+            />
+          </svg>
         </div>
 
-        <ul className="grid grid-cols-4 items-end text-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[71%] border-t border-border-muted/60" />
+
+        <div className="pointer-events-none absolute left-1/2 top-0 flex h-[112px] w-[112px] -translate-x-1/2 -translate-y-[10%] items-center justify-center overflow-hidden rounded-full bg-[#cbe6ff]">
+          <Image src="/tapwash-logo.png" alt="TapWash" width={84} height={84} className="h-[90px] w-[90px] rounded-full object-cover" priority />
+        </div>
+
+        <ul className="absolute inset-x-0 bottom-[max(0.4rem,env(safe-area-inset-bottom))] grid w-full grid-cols-4 items-end text-center">
           {navItems.map((item) => {
             const active =
               pathname === item.href ||
@@ -30,9 +42,20 @@ export function BottomNav() {
 
             return (
               <li key={item.href}>
-                <Link href={item.href} className="inline-flex w-full flex-col items-center gap-1 py-1">
-                  <span className={active ? "text-primary-500" : "text-text-muted"}>{renderIcon(item.icon)}</span>
-                  <span className={`text-[11px] font-medium ${active ? "text-primary-500" : "text-text-muted"}`}>{item.label}</span>
+                <Link
+                  href={item.href}
+                  aria-label={item.label}
+                  aria-current={active ? "page" : undefined}
+                  className="inline-flex h-[56px] w-full flex-col items-center justify-end gap-1 rounded-xl py-1 outline-none transition focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                >
+                  <span
+                    className={`text-[20px] transition duration-200 ${active ? "scale-105 text-primary-500" : "text-primary-500/50"}`}
+                  >
+                    {renderIcon(item.icon)}
+                  </span>
+                  <span className={`text-[11px] font-semibold leading-none transition duration-200 ${active ? "text-primary-500" : "text-primary-500/50"}`}>
+                    {item.label}
+                  </span>
                 </Link>
               </li>
             );
@@ -45,37 +68,16 @@ export function BottomNav() {
 
 function renderIcon(icon: "home" | "heart" | "orders" | "settings") {
   if (icon === "home") {
-    return (
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M3 11.5L12 4l9 7.5" />
-        <path d="M5.5 10.5V20h13V10.5" />
-      </svg>
-    );
+    return <FlaticonIcon name="home" />;
   }
 
   if (icon === "heart") {
-    return (
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-        <path d="M12 21s-7-4.4-9.5-8.4C.7 9.8 2.2 6 6 6c2.2 0 3.2 1.2 4 2.3C10.8 7.2 11.8 6 14 6c3.8 0 5.3 3.8 3.5 6.6C19 16.6 12 21 12 21z" />
-      </svg>
-    );
+    return <FlaticonIcon name="heart" />;
   }
 
   if (icon === "orders") {
-    return (
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M4 7h16" />
-        <path d="M7 12h10" />
-        <path d="M9 17h6" />
-        <rect x="3" y="4" width="18" height="16" rx="3" />
-      </svg>
-    );
+    return <FlaticonIcon name="list" />;
   }
 
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 2l2 2.4 3.2-.4.8 3.2 3 1.4-1.4 3 1.4 3-3 1.4-.8 3.2-3.2-.4L12 22l-2-2.4-3.2.4-.8-3.2-3-1.4 1.4-3-1.4-3 3-1.4.8-3.2 3.2.4L12 2z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
+  return <FlaticonIcon name="settings" />;
 }

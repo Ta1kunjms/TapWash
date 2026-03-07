@@ -1,61 +1,96 @@
 import Link from "next/link";
+import { FlaticonIcon } from "@/components/ui/flaticon-icon";
+import { NotificationBell } from "@/components/customer/notification-bell";
 
 type MobileTopBarProps = {
   searchPlaceholder: string;
   searchValue?: string;
   searchAction?: string;
+  searchHiddenFields?: Record<string, string | number | boolean | undefined>;
+  locationLabel?: string;
+  profileInitials?: string;
+  notificationCount?: number;
+  liveNotificationCount?: boolean;
 };
 
-export function MobileTopBar({ searchPlaceholder, searchValue, searchAction = "/customer" }: MobileTopBarProps) {
+export function MobileTopBar({
+  searchPlaceholder,
+  searchValue,
+  searchAction = "/customer",
+  searchHiddenFields,
+  locationLabel = "Brgy. Tambler, GSC",
+  profileInitials = "TW",
+  notificationCount = 0,
+  liveNotificationCount = true,
+}: MobileTopBarProps) {
   return (
-    <header className="-mx-4 mb-4 overflow-hidden rounded-b-[2rem] bg-gradient-to-b from-primary-500 to-primary-500/80 px-4 pb-4 pt-3 text-white shadow-soft">
-      <div className="mb-3 flex items-center justify-between">
-        <button className="rounded-full p-2 transition hover:bg-white/15" aria-label="Notifications">
-          <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
-            <path d="M12 2a6 6 0 00-6 6v3.7c0 .9-.3 1.8-.9 2.5L3.3 16a1 1 0 00.7 1.7h16a1 1 0 00.7-1.7l-1.8-1.8a3.6 3.6 0 01-.9-2.5V8a6 6 0 00-6-6zm0 20a3 3 0 002.8-2H9.2A3 3 0 0012 22z" />
-          </svg>
-        </button>
-        <div className="text-center leading-tight">
-          <p className="text-xs font-semibold tracking-wide text-white/80">Location</p>
-          <p className="text-sm font-semibold">Brgy. Tambler, GSC</p>
-        </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 bg-white/30 text-xs font-bold">
-          TJ
-        </div>
+    <header className="sticky top-0 z-30 -mx-4 mb-4 overflow-hidden rounded-b-[2rem] bg-primary-500 px-4 pb-4 pt-3 text-white shadow-soft">
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <svg className="block h-full w-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1361.44 595">
+          <defs>
+            <linearGradient id="topbar-water-gradient" x1="680.72" x2="680.72" y1="594.988" y2="0" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#3FA9F0" />
+              <stop offset="0.17" stopColor="#4AAEF1" />
+              <stop offset="0.48" stopColor="#68BBF4" />
+              <stop offset="0.89" stopColor="#97D0F9" />
+              <stop offset="1" stopColor="#A6D6FB" />
+            </linearGradient>
+          </defs>
+          <rect width="1361.44" height="595" fill="url(#topbar-water-gradient)" />
+          <path
+            d="M0 485C37 525 77 503 119 530C157 556 193 512 232 531C272 551 303 500 343 526C383 553 421 501 460 531C500 562 536 510 576 526C616 542 649 500 689 531C730 562 764 503 805 531C846 559 881 504 921 525C961 546 996 498 1038 529C1079 560 1117 508 1156 530C1195 552 1232 510 1272 525C1306 538 1334 527 1361.44 511V595H0V485Z"
+            fill="#F4FAFF"
+          />
+          <circle cx="317" cy="536" r="7" fill="#9ED1FA" />
+          <circle cx="352" cy="544" r="5" fill="#9ED1FA" />
+          <circle cx="562" cy="537" r="6" fill="#9ED1FA" />
+          <circle cx="960" cy="544" r="5" fill="#9ED1FA" />
+          <circle cx="1122" cy="539" r="7" fill="#9ED1FA" />
+        </svg>
       </div>
 
-      <form action={searchAction} className="rounded-full bg-white p-1.5 shadow-md">
-        <div className="flex items-center gap-2 rounded-full px-2">
-          <svg viewBox="0 0 24 24" className="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            name="q"
-            defaultValue={searchValue ?? ""}
-            placeholder={searchPlaceholder}
-            className="h-9 w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-primary-500/70"
-          />
-          <button
-            type="submit"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-primary-500/30 bg-primary-500/10 text-primary-500"
-            aria-label="Apply search"
+      <div className="relative">
+        <div className="mb-3 flex items-center justify-between">
+          <NotificationBell initialCount={notificationCount} liveCount={liveNotificationCount} />
+          <Link href="/customer/location" className="text-center leading-tight" aria-label="Set location">
+            <p className="text-xs font-semibold tracking-wide text-white/80">Location</p>
+            <p className="line-clamp-1 max-w-[10rem] text-sm font-semibold">{locationLabel}</p>
+          </Link>
+          <Link
+            href="/customer/settings/profile"
+            className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 bg-white/30 text-xs font-bold"
+            aria-label="My profile"
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 6h16" />
-              <path d="M7 12h10" />
-              <path d="M10 18h4" />
-            </svg>
-          </button>
+            {profileInitials}
+          </Link>
         </div>
-      </form>
 
-      <div className="relative mt-3 h-3">
-        <div className="absolute inset-x-0 top-0 h-2 rounded-full bg-primary-500/90" />
-        <div className="absolute left-0 top-[-6px] h-4 w-8 rounded-full bg-primary-500/90" />
-        <div className="absolute left-10 top-[-6px] h-4 w-10 rounded-full bg-primary-500/90" />
-        <div className="absolute left-24 top-[-6px] h-4 w-7 rounded-full bg-primary-500/90" />
-        <div className="absolute right-8 top-[-6px] h-4 w-10 rounded-full bg-primary-500/90" />
+        <form action={searchAction} className="rounded-full bg-white p-1.5 shadow-md">
+          {searchHiddenFields
+            ? Object.entries(searchHiddenFields).map(([name, value]) => {
+                if (value === undefined) return null;
+                return <input key={name} type="hidden" name={name} value={String(value)} />;
+              })
+            : null}
+          <div className="flex items-center gap-2 rounded-full px-2">
+            <FlaticonIcon name="search" className="text-sm text-primary-500" />
+            <input
+              name="q"
+              defaultValue={searchValue ?? ""}
+              placeholder={searchPlaceholder}
+              className="h-9 w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-primary-500/70"
+            />
+            <button
+              type="submit"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-primary-500/30 bg-primary-500/10 text-primary-500"
+              aria-label="Apply search"
+            >
+              <FlaticonIcon name="filter" className="text-sm" />
+            </button>
+          </div>
+        </form>
+
+        <div className="h-2" />
       </div>
     </header>
   );
@@ -65,9 +100,7 @@ export function SubPageHeader({ title, href = "/customer/settings" }: { title: s
   return (
     <div className="mb-5 flex items-center gap-3 pt-1">
       <Link href={href} className="rounded-full p-2 text-primary-500 transition hover:bg-white/60" aria-label="Go back">
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <FlaticonIcon name="angle-small-left" className="text-lg" />
       </Link>
       <h1 className="text-xl font-bold text-text-secondary">{title}</h1>
     </div>
