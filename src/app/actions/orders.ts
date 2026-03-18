@@ -17,18 +17,88 @@ function parseSelectedOptionIds(value: FormDataEntryValue | null): string[] {
   }
 }
 
+function parseServiceSelections(value: FormDataEntryValue | null): Array<{
+  serviceId: string;
+  loads: number;
+  selectedOptionIds?: string[];
+}> {
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (entry): entry is { serviceId: string; loads: number; selectedOptionIds?: string[] } =>
+            Boolean(entry) &&
+            typeof entry === "object" &&
+            typeof (entry as { serviceId?: unknown }).serviceId === "string" &&
+            typeof (entry as { loads?: unknown }).loads === "number",
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseIsoDateOrThrow(value: FormDataEntryValue | null, fieldName: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Missing ${fieldName}`);
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid ${fieldName}`);
+  }
+
+  return parsed.toISOString();
+}
+
+function normalizePhoneNumberOrThrow(value: FormDataEntryValue | null): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("Missing contactPhone");
+  }
+
+  const digits = value.replace(/\D/g, "");
+
+  if (/^09\d{9}$/.test(digits)) {
+    return `+63${digits.slice(1)}`;
+  }
+
+  if (/^9\d{9}$/.test(digits)) {
+    return `+63${digits}`;
+  }
+
+  if (/^63\d{10}$/.test(digits)) {
+    return `+${digits}`;
+  }
+
+  throw new Error("Invalid contactPhone");
+}
+
 export async function createOrderAction(formData: FormData) {
   try {
+    const serviceSelections = parseServiceSelections(formData.get("serviceSelections"));
+    const pickupDateIso = parseIsoDateOrThrow(formData.get("pickupDate"), "pickupDate");
+    const deliveryDateIso = parseIsoDateOrThrow(formData.get("deliveryDate"), "deliveryDate");
+    const contactPhone = normalizePhoneNumberOrThrow(formData.get("contactPhone"));
+
+    if (new Date(deliveryDateIso).getTime() < new Date(pickupDateIso).getTime()) {
+      throw new Error("deliveryDate must be after pickupDate");
+    }
+
     const createdOrder = await createOrder({
       shopId: String(formData.get("shopId")),
       serviceId: String(formData.get("serviceId")),
       weightEstimate: Number(formData.get("weightEstimate")),
       selectedOptionIds: parseSelectedOptionIds(formData.get("selectedOptionIds")),
-      pickupDate: new Date(String(formData.get("pickupDate"))).toISOString(),
-      deliveryDate: formData.get("deliveryDate") ? new Date(String(formData.get("deliveryDate"))).toISOString() : undefined,
+      serviceSelections,
+      pickupDate: pickupDateIso,
+      deliveryDate: deliveryDateIso,
       deliveryFee: Number(formData.get("deliveryFee") ?? 0),
       tipAmount: Number(formData.get("tipAmount") ?? 0),
-      contactPhone: String(formData.get("contactPhone") || ""),
+      contactPhone,
       deliveryInstructions: String(formData.get("deliveryInstructions") || ""),
       riderNotes: String(formData.get("riderNotes") || ""),
       pickupAddress: String(formData.get("pickupAddress")),
@@ -52,6 +122,7 @@ export async function createOrderAction(formData: FormData) {
     const serviceId = String(formData.get("serviceId") ?? "");
     const weightEstimate = String(formData.get("weightEstimate") ?? "");
     const promoCode = String(formData.get("promoCode") ?? "");
+    const bucket = String(formData.get("bucket") ?? "");
     const nextSearch = new URLSearchParams();
     nextSearch.set("error", "Unable to create booking. Please review your details and try again.");
 
@@ -65,6 +136,10 @@ export async function createOrderAction(formData: FormData) {
 
     if (weightEstimate) {
       nextSearch.set("weight", weightEstimate);
+    }
+
+    if (bucket) {
+      nextSearch.set("bucket", bucket);
     }
 
     if (promoCode) {

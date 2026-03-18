@@ -1,23 +1,97 @@
 import { CheckoutForm } from "@/components/customer/checkout-form";
+import { FlaticonIcon } from "@/components/ui/flaticon-icon";
+import { roleToPath } from "@/lib/roles";
+import { listCustomerAddresses, getSelectedCustomerAddress } from "@/services/addresses";
+import { getCurrentUserRole } from "@/services/auth";
 import { getVerifiedShopsWithServices } from "@/services/shops";
+import { redirect } from "next/navigation";
+
+type CheckoutBucketSelection = {
+  serviceId: string;
+  loads: number;
+  selectedOptionIds?: string[];
+};
 
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; shopId?: string; serviceId?: string; weight?: string; promoCode?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; shopId?: string; serviceId?: string; weight?: string; promoCode?: string; error?: string; bucket?: string }>;
 }) {
-  const { q, shopId, serviceId, weight, promoCode } = await searchParams;
-  const shops = await getVerifiedShopsWithServices(q);
+  const role = await getCurrentUserRole();
+  if (!role) redirect("/login");
+  if (role !== "customer") redirect(roleToPath(role));
+
+  const { q, shopId, serviceId, weight, promoCode, bucket } = await searchParams;
+  const [selectedAddress, savedAddresses] = await Promise.all([
+    getSelectedCustomerAddress(),
+    listCustomerAddresses(),
+  ]);
+  let shops: Awaited<ReturnType<typeof getVerifiedShopsWithServices>> = [];
+  let loadError: string | null = null;
+
+  try {
+    shops = await getVerifiedShopsWithServices(q);
+  } catch {
+    loadError = "Shops are taking too long to load right now. Please try again.";
+  }
+  const initialBucket = parseBucketSelections(bucket);
 
   return (
     <main className="space-y-4 pb-2">
+      {loadError ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <FlaticonIcon name="info" className="text-base" />
+            {loadError}
+          </p>
+        </div>
+      ) : null}
+
       <CheckoutForm
         shops={shops}
         initialShopId={shopId}
         initialServiceId={serviceId}
-        initialWeight={Number(weight ?? 3)}
+        initialWeight={weight ? Number(weight) : undefined}
+        initialBucket={initialBucket}
         initialPromoCode={promoCode}
+        initialSelectedAddress={selectedAddress ? {
+          addressLine: selectedAddress.address_line,
+          lat: selectedAddress.lat,
+          lng: selectedAddress.lng,
+        } : null}
+        initialSavedAddresses={savedAddresses.map((address) => address.address_line)}
       />
     </main>
   );
+}
+
+function parseBucketSelections(value?: string): CheckoutBucketSelection[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter(
+        (entry): entry is CheckoutBucketSelection =>
+          Boolean(entry) &&
+          typeof entry === "object" &&
+          typeof (entry as CheckoutBucketSelection).serviceId === "string" &&
+          typeof (entry as CheckoutBucketSelection).loads === "number",
+      )
+      .map((entry) => ({
+        serviceId: entry.serviceId,
+        loads: Math.max(1, Math.round(entry.loads)),
+        selectedOptionIds: Array.isArray(entry.selectedOptionIds)
+          ? entry.selectedOptionIds.filter((optionId): optionId is string => typeof optionId === "string")
+          : [],
+      }));
+  } catch {
+    return [];
+  }
 }

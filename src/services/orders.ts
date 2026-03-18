@@ -1,13 +1,36 @@
 import { ORDER_TRANSITIONS } from "@/lib/constants";
-import { calculateServiceEstimate, normalizePricingService } from "@/lib/pricing";
+import {
+  calculateServiceEstimate,
+  getServiceLoadCapacityKg,
+  normalizePricingService,
+  type PricingOptionGroup,
+} from "@/lib/pricing";
 import { createClient } from "@/lib/supabase/server";
 import { bookOrderSchema, updateOrderStatusSchema } from "@/lib/validators/order";
 import { applyVoucher, createMockPaymentIntent } from "@/services/checkout";
 import { logOrderEvent } from "@/services/notifications";
-import type { OrderStatus } from "@/types/domain";
+import type { OrderStatus, UserRole } from "@/types/domain";
+
+type SelectedServiceRecord = {
+  id: string;
+  shop_id: string;
+  name: string;
+  description: string | null;
+  pricing_model: "per_kg" | "per_load";
+  unit_price: number;
+  load_capacity_kg: number | null;
+  service_option_groups?: PricingOptionGroup[] | null;
+};
 
 export async function createOrder(input: unknown) {
   const parsed = bookOrderSchema.parse(input);
+  const pickupTimestamp = Date.parse(parsed.pickupDate);
+  const deliveryTimestamp = parsed.deliveryDate ? Date.parse(parsed.deliveryDate) : null;
+
+  if (parsed.deliveryDate && (Number.isNaN(pickupTimestamp) || Number.isNaN(deliveryTimestamp ?? Number.NaN) || (deliveryTimestamp ?? 0) < pickupTimestamp)) {
+    throw new Error("Invalid delivery schedule");
+  }
+
   const supabase = await createClient();
 
   const {
@@ -17,17 +40,33 @@ export async function createOrder(input: unknown) {
 
   if (userError || !user) throw new Error("Unauthorized");
 
-  const { data: service, error: serviceError } = await supabase
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single<{ role: UserRole }>();
+
+  if (profile?.role !== "customer") throw new Error("Unauthorized");
+
+  const requestedSelections = parsed.serviceSelections.length > 0
+    ? parsed.serviceSelections
+    : [{ serviceId: parsed.serviceId, loads: 1, selectedOptionIds: parsed.selectedOptionIds }];
+  const requestedServiceIds = requestedSelections.map((selection) => selection.serviceId);
+
+  const { data: services, error: servicesError } = await supabase
     .from("services")
     .select(
-      "shop_id, name, description, pricing_model, unit_price, load_capacity_kg, service_option_groups(id, name, option_type, selection_type, is_required, sort_order, service_options(id, name, description, price_delta, price_type, is_default, sort_order))",
+      "id, shop_id, name, description, pricing_model, unit_price, load_capacity_kg, service_option_groups(id, name, option_type, selection_type, is_required, sort_order, service_options(id, name, description, price_delta, price_type, is_default, sort_order))",
     )
-    .eq("id", parsed.serviceId)
-    .single();
+    .in("id", requestedServiceIds);
 
-  if (serviceError || !service || service.shop_id !== parsed.shopId) {
+  if (servicesError || !services || services.length !== requestedServiceIds.length) {
     throw new Error("Invalid service selected");
   }
+
+  const servicesById = new Map(
+    services.map((service) => [service.id, service as SelectedServiceRecord]),
+  );
 
   const { data: shop, error: shopError } = await supabase
     .from("laundry_shops")
@@ -39,14 +78,39 @@ export async function createOrder(input: unknown) {
     throw new Error("Laundry shop not found");
   }
 
-  const normalizedService = normalizePricingService(service);
-  const estimate = calculateServiceEstimate({
-    service: normalizedService,
-    weightKg: parsed.weightEstimate,
-    selectedOptionIds: parsed.selectedOptionIds,
-    shopLoadCapacityKg: shop.load_capacity_kg,
+  const estimatedServices = requestedSelections.map((selection) => {
+    const service = servicesById.get(selection.serviceId);
+
+    if (!service || service.shop_id !== parsed.shopId) {
+      throw new Error("Invalid service selected");
+    }
+
+    const normalizedService = normalizePricingService(service);
+    const loadCapacityKg = getServiceLoadCapacityKg(normalizedService, shop.load_capacity_kg);
+    const weightKg = Number((selection.loads * loadCapacityKg).toFixed(1));
+    const estimate = calculateServiceEstimate({
+      service: normalizedService,
+      weightKg,
+      selectedOptionIds: selection.selectedOptionIds,
+      shopLoadCapacityKg: shop.load_capacity_kg,
+    });
+
+    return {
+      serviceId: service.id,
+      service: normalizedService,
+      loads: selection.loads,
+      weightKg,
+      estimate,
+    };
   });
-  const subtotal = estimate.subtotal;
+
+  const primarySelection = estimatedServices.find((entry) => entry.serviceId === parsed.serviceId) ?? estimatedServices[0];
+  const subtotal = Number(estimatedServices.reduce((sum, entry) => sum + entry.estimate.subtotal, 0).toFixed(2));
+  const totalWeight = Number(estimatedServices.reduce((sum, entry) => sum + entry.weightKg, 0).toFixed(1));
+  const totalBasePrice = Number(estimatedServices.reduce((sum, entry) => sum + entry.estimate.basePrice, 0).toFixed(2));
+  const totalOptionsPrice = Number(estimatedServices.reduce((sum, entry) => sum + entry.estimate.optionsTotal, 0).toFixed(2));
+  const totalLoads = estimatedServices.reduce((sum, entry) => sum + entry.loads, 0);
+  const allSelectedOptionIds = estimatedServices.flatMap((entry) => entry.estimate.selectedOptions.map((option) => option.id));
   const { promoCode, discount } = await applyVoucher(parsed.promoCode, subtotal);
   const total = subtotal + parsed.deliveryFee + parsed.tipAmount - discount;
   const paymentIntent = await createMockPaymentIntent(total, parsed.paymentMethod);
@@ -56,17 +120,17 @@ export async function createOrder(input: unknown) {
     .insert({
       customer_id: user.id,
       shop_id: parsed.shopId,
-      service_id: parsed.serviceId,
-      weight_estimate: parsed.weightEstimate,
-      selected_option_ids: estimate.selectedOptions.map((option) => option.id),
+      service_id: primarySelection.serviceId,
+      weight_estimate: totalWeight,
+      selected_option_ids: allSelectedOptionIds,
       service_snapshot: {
-        name: normalizedService.name,
-        description: normalizedService.description,
-        pricingModel: normalizedService.pricing_model,
-        unitPrice: normalizedService.unit_price,
-        loadCapacityKg: estimate.loadCapacityKg,
+        name: primarySelection.service.name,
+        description: primarySelection.service.description,
+        pricingModel: primarySelection.service.pricing_model,
+        unitPrice: primarySelection.service.unit_price,
+        loadCapacityKg: primarySelection.estimate.loadCapacityKg,
         shopName: shop.shop_name,
-        selectedOptions: estimate.selectedOptions.map((option) => ({
+        selectedOptions: primarySelection.estimate.selectedOptions.map((option) => ({
           id: option.id,
           name: option.name,
           optionType: option.option_type,
@@ -74,17 +138,45 @@ export async function createOrder(input: unknown) {
           priceDelta: option.price_delta,
           priceType: option.price_type,
         })),
+        items: estimatedServices.map((entry) => ({
+          serviceId: entry.serviceId,
+          name: entry.service.name,
+          description: entry.service.description,
+          pricingModel: entry.service.pricing_model,
+          unitPrice: entry.service.unit_price,
+          loadCapacityKg: entry.estimate.loadCapacityKg,
+          loads: entry.loads,
+          weightKg: entry.weightKg,
+          selectedOptions: entry.estimate.selectedOptions.map((option) => ({
+            id: option.id,
+            name: option.name,
+            optionType: option.option_type,
+            groupName: option.group_name,
+            priceDelta: option.price_delta,
+            priceType: option.price_type,
+          })),
+          subtotal: entry.estimate.subtotal,
+        })),
       },
       pricing_breakdown: {
-        basePrice: estimate.basePrice,
-        optionsTotal: estimate.optionsTotal,
-        loadCount: estimate.loadCount,
-        loadCapacityKg: estimate.loadCapacityKg,
+        basePrice: totalBasePrice,
+        optionsTotal: totalOptionsPrice,
+        loadCount: totalLoads,
+        loadCapacityKg: primarySelection.estimate.loadCapacityKg,
         subtotal,
         deliveryFee: parsed.deliveryFee,
         tipAmount: parsed.tipAmount,
         discountAmount: discount,
         total,
+        items: estimatedServices.map((entry) => ({
+          serviceId: entry.serviceId,
+          basePrice: entry.estimate.basePrice,
+          optionsTotal: entry.estimate.optionsTotal,
+          loadCount: entry.estimate.loadCount,
+          loadCapacityKg: entry.estimate.loadCapacityKg,
+          subtotal: entry.estimate.subtotal,
+          selectedOptionIds: entry.estimate.selectedOptions.map((option) => option.id),
+        })),
       },
       total_price: total,
       delivery_fee: parsed.deliveryFee,
@@ -116,10 +208,15 @@ export async function createOrder(input: unknown) {
   await logOrderEvent(data.id, "order_created", {
     promoCode,
     discount,
-    loadCount: estimate.loadCount,
+    loadCount: totalLoads,
     serviceSubtotal: subtotal,
-    optionsTotal: estimate.optionsTotal,
-    selectedOptions: estimate.selectedOptions.map((option) => option.name),
+    optionsTotal: totalOptionsPrice,
+    selectedOptions: estimatedServices.flatMap((entry) => entry.estimate.selectedOptions.map((option) => option.name)),
+    selectedServices: estimatedServices.map((entry) => ({
+      name: entry.service.name,
+      loads: entry.loads,
+      subtotal: entry.estimate.subtotal,
+    })),
     tipAmount: parsed.tipAmount,
     contactPhone: parsed.contactPhone,
     paymentMethod: parsed.paymentMethod,
@@ -159,9 +256,17 @@ export async function updateOrderStatus(input: unknown) {
 
 export async function getMyOrders() {
   const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) throw new Error("Unauthorized");
+
   const { data, error } = await supabase
     .from("orders")
     .select("id, status, total_price, pickup_date, created_at, payment_method, payment_reference, promo_code, discount_amount, distance_km, eta_minutes, laundry_shops(shop_name)")
+    .eq("customer_id", user.id)
     .order("created_at", { ascending: false });
 
   if (error) throw error;

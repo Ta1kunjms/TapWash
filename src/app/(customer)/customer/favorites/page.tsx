@@ -1,5 +1,6 @@
 import { FavoriteToggleButton } from "@/components/customer/favorite-toggle-button";
 import { MobileTopBar } from "@/components/customer/mobile-chrome";
+import { getSelectedCustomerAddress } from "@/services/addresses";
 import { getFavoriteShops } from "@/services/favorites";
 import { getCustomerProfile, getInitials } from "@/services/customer";
 import { getUnreadNotificationCount } from "@/services/notifications";
@@ -11,14 +12,17 @@ export default async function CustomerFavoritesPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const { q } = await searchParams;
-  const profile = await getCustomerProfile();
+  const [profile, selectedAddress] = await Promise.all([
+    getCustomerProfile(),
+    getSelectedCustomerAddress(),
+  ]);
   const notificationCount = await getUnreadNotificationCount();
   const profileInitials = getInitials(profile?.first_name ?? null, profile?.surname ?? null) || "TW";
-  const locationLabel = profile?.address?.trim() || "Set location";
+  const locationLabel = selectedAddress?.address_line?.trim() || profile?.address?.trim() || "Set location";
   const favorites = await getFavoriteShops({
     search: q,
-    preferredLat: profile?.preferred_lat,
-    preferredLng: profile?.preferred_lng,
+    preferredLat: selectedAddress?.lat ?? profile?.preferred_lat,
+    preferredLng: selectedAddress?.lng ?? profile?.preferred_lng,
   });
 
   return (

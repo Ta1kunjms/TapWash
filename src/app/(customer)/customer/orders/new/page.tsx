@@ -1,14 +1,35 @@
 import { BookingForm } from "@/components/customer/booking-form";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
+import { roleToPath } from "@/lib/roles";
+import { getCurrentUserRole } from "@/services/auth";
 import { getVerifiedShopsWithServices } from "@/services/shops";
+import { redirect } from "next/navigation";
+
+type BookingBucketSelection = {
+  serviceId: string;
+  loads: number;
+  selectedOptionIds?: string[];
+};
 
 export default async function NewOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; shopId?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; shopId?: string; serviceId?: string; bucket?: string; error?: string }>;
 }) {
-  const { q, shopId, error } = await searchParams;
-  const shops = await getVerifiedShopsWithServices(q);
+  const role = await getCurrentUserRole();
+  if (!role) redirect("/login");
+  if (role !== "customer") redirect(roleToPath(role));
+
+  const { q, shopId, serviceId, bucket, error } = await searchParams;
+  let shops: Awaited<ReturnType<typeof getVerifiedShopsWithServices>> = [];
+  let loadError: string | null = null;
+
+  try {
+    shops = await getVerifiedShopsWithServices(q);
+  } catch {
+    loadError = "Shops are taking too long to load right now. Please try again.";
+  }
+  const initialBucket = parseBucketSelections(bucket);
 
   return (
     <main className="space-y-4 pb-2">
@@ -21,8 +42,22 @@ export default async function NewOrderPage({
         </div>
       ) : null}
 
+      {loadError ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <FlaticonIcon name="info" className="text-base" />
+            {loadError}
+          </p>
+        </div>
+      ) : null}
+
       {shops.length > 0 ? (
-        <BookingForm shops={shops} initialShopId={shopId} />
+        <BookingForm
+          shops={shops}
+          initialShopId={shopId}
+          initialServiceId={serviceId}
+          initialBucket={initialBucket}
+        />
       ) : (
         <div className="rounded-[2rem] border border-border-muted/70 bg-white/95 p-5 shadow-soft">
           <p className="text-sm text-text-secondary">No verified shops yet. Please check again later.</p>
@@ -30,4 +65,36 @@ export default async function NewOrderPage({
       )}
     </main>
   );
+}
+
+function parseBucketSelections(value?: string): BookingBucketSelection[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter(
+        (entry): entry is BookingBucketSelection =>
+          Boolean(entry) &&
+          typeof entry === "object" &&
+          typeof (entry as BookingBucketSelection).serviceId === "string" &&
+          typeof (entry as BookingBucketSelection).loads === "number",
+      )
+      .map((entry) => ({
+        serviceId: entry.serviceId,
+        loads: Math.max(0, Math.min(20, Math.round(entry.loads))),
+        selectedOptionIds: Array.isArray(entry.selectedOptionIds)
+          ? entry.selectedOptionIds.filter((optionId): optionId is string => typeof optionId === "string")
+          : [],
+      }))
+      .filter((entry) => entry.loads > 0);
+  } catch {
+    return [];
+  }
 }

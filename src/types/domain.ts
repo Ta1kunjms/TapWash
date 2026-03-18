@@ -28,6 +28,9 @@ export interface Profile {
   phone: string | null;
   address: string | null;
   city_id: string | null;
+  location_permission_status: "granted" | "denied" | "unsupported" | null;
+  location_permission_updated_at: string | null;
+  location_onboarding_last_prompted_at: string | null;
   created_at: string;
 }
 

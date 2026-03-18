@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
 import { NotificationBell } from "@/components/customer/notification-bell";
+import { LocationSheetTrigger } from "@/components/customer/location-sheet-trigger";
 
 type MobileTopBarProps = {
   searchPlaceholder: string;
@@ -52,10 +53,7 @@ export function MobileTopBar({
       <div className="relative">
         <div className="mb-3 flex items-center justify-between">
           <NotificationBell initialCount={notificationCount} liveCount={liveNotificationCount} />
-          <Link href="/customer/location" className="text-center leading-tight" aria-label="Set location">
-            <p className="text-xs font-semibold tracking-wide text-white/80">Location</p>
-            <p className="line-clamp-1 max-w-[10rem] text-sm font-semibold">{locationLabel}</p>
-          </Link>
+          <LocationSheetTrigger locationLabel={locationLabel} />
           <Link
             href="/customer/settings/profile"
             className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 bg-white/30 text-xs font-bold"

@@ -249,13 +249,12 @@ export function calculateServiceEstimate(input: {
   };
 }
 
-export function formatServiceRateLabel(service: Partial<PricingService>, shopLoadCapacityKg?: number | null): string {
+export function formatServiceRateLabel(service: Partial<PricingService>): string {
   const normalizedService = normalizePricingService(service);
   const currency = `₱${Number(normalizedService.unit_price ?? 0).toFixed(2)}`;
 
   if (normalizedService.pricing_model === "per_load") {
-    const loadCapacityKg = getServiceLoadCapacityKg(normalizedService, shopLoadCapacityKg);
-    return `${currency}/load · ${loadCapacityKg.toFixed(0)} kg/load`;
+    return `${currency}/load`;
   }
 
   return `${currency}/kg`;

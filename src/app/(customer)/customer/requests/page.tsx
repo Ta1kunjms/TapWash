@@ -1,5 +1,6 @@
 import { MobileTopBar } from "@/components/customer/mobile-chrome";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
+import { getSelectedCustomerAddress } from "@/services/addresses";
 import { getCustomerProfile, getInitials } from "@/services/customer";
 import { getUnreadNotificationCount } from "@/services/notifications";
 import { getMyOrders } from "@/services/orders";
@@ -24,13 +25,14 @@ export default async function CustomerRequestsPage({
   const selectedTab: TabKey = tab === "completed" || tab === "cancelled" ? tab : "active";
   const justBooked = booked === "1";
 
-  const [orders, profile, notificationCount] = await Promise.all([
+  const [orders, profile, selectedAddress, notificationCount] = await Promise.all([
     getMyOrders(),
     getCustomerProfile(),
+    getSelectedCustomerAddress(),
     getUnreadNotificationCount(),
   ]);
   const profileInitials = getInitials(profile?.first_name ?? null, profile?.surname ?? null) || "TW";
-  const locationLabel = profile?.address?.trim() || "Set location";
+  const locationLabel = selectedAddress?.address_line?.trim() || profile?.address?.trim() || "Set location";
   const filteredOrders = orders.filter((order) => {
     if (selectedTab === "completed") return order.status === "completed";
     if (selectedTab === "cancelled") return order.status === "cancelled";

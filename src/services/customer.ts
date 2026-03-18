@@ -10,6 +10,9 @@ export type CustomerProfile = {
   preferred_lat: number | null;
   preferred_lng: number | null;
   notification_last_read_at: string | null;
+  location_permission_status: "granted" | "denied" | "unsupported" | null;
+  location_permission_updated_at: string | null;
+  location_onboarding_last_prompted_at: string | null;
 };
 
 export async function getCustomerProfile(): Promise<CustomerProfile | null> {
@@ -22,7 +25,7 @@ export async function getCustomerProfile(): Promise<CustomerProfile | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, surname, phone, address, preferred_lat, preferred_lng, notification_last_read_at")
+    .select("first_name, surname, phone, address, preferred_lat, preferred_lng, notification_last_read_at, location_permission_status, location_permission_updated_at, location_onboarding_last_prompted_at")
     .eq("id", user.id)
     .single<{
       first_name: string | null;
@@ -32,6 +35,9 @@ export async function getCustomerProfile(): Promise<CustomerProfile | null> {
       preferred_lat: number | null;
       preferred_lng: number | null;
       notification_last_read_at: string | null;
+      location_permission_status: "granted" | "denied" | "unsupported" | null;
+      location_permission_updated_at: string | null;
+      location_onboarding_last_prompted_at: string | null;
     }>();
 
   return {
@@ -44,6 +50,9 @@ export async function getCustomerProfile(): Promise<CustomerProfile | null> {
     preferred_lat: profile?.preferred_lat ?? null,
     preferred_lng: profile?.preferred_lng ?? null,
     notification_last_read_at: profile?.notification_last_read_at ?? null,
+    location_permission_status: profile?.location_permission_status ?? null,
+    location_permission_updated_at: profile?.location_permission_updated_at ?? null,
+    location_onboarding_last_prompted_at: profile?.location_onboarding_last_prompted_at ?? null,
   };
 }
 

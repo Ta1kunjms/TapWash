@@ -99,15 +99,18 @@ export function LocationPickerSheet() {
     };
   }, [open]);
 
-  const loadAddresses = async () => {
+  const loadAddresses = async (): Promise<CustomerAddress[]> => {
     setLoading(true);
     try {
       const response = await fetch("/api/customer/addresses", { cache: "no-store" });
       const body = (await response.json()) as { addresses?: CustomerAddress[]; error?: string };
       if (!response.ok) throw new Error(body.error || "Unable to load addresses");
-      setAddresses(body.addresses ?? []);
+      const nextAddresses = body.addresses ?? [];
+      setAddresses(nextAddresses);
+      return nextAddresses;
     } catch (error) {
       notify.error(error instanceof Error ? error.message : "Unable to load addresses");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -280,7 +283,16 @@ export function LocationPickerSheet() {
       if (!response.ok || !body.address) throw new Error(body.error || "Unable to save address");
 
       await loadAddresses();
-      window.dispatchEvent(new CustomEvent("tapwash:location-updated", { detail: { label: body.address.address_line } }));
+      window.dispatchEvent(
+        new CustomEvent("tapwash:location-updated", {
+          detail: {
+            label: body.address.address_line,
+            addressLine: body.address.address_line,
+            lat: body.address.lat,
+            lng: body.address.lng,
+          },
+        }),
+      );
       router.refresh();
       notify.success("Address saved.");
       closeSheet();
@@ -301,7 +313,16 @@ export function LocationPickerSheet() {
       const body = (await response.json()) as { address?: CustomerAddress; error?: string };
       if (!response.ok || !body.address) throw new Error(body.error || "Unable to update default address");
       await loadAddresses();
-      window.dispatchEvent(new CustomEvent("tapwash:location-updated", { detail: { label: body.address.address_line } }));
+      window.dispatchEvent(
+        new CustomEvent("tapwash:location-updated", {
+          detail: {
+            label: body.address.address_line,
+            addressLine: body.address.address_line,
+            lat: body.address.lat,
+            lng: body.address.lng,
+          },
+        }),
+      );
       router.refresh();
       notify.success("Default address updated.");
     } catch (error) {
@@ -317,7 +338,30 @@ export function LocationPickerSheet() {
       const response = await fetch(`/api/customer/addresses/${id}`, { method: "DELETE" });
       const body = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(body.error || "Unable to delete address");
-      await loadAddresses();
+      const nextAddresses = await loadAddresses();
+      const selectedAddress = nextAddresses.find((address) => address.is_default) ?? null;
+      if (selectedAddress) {
+        window.dispatchEvent(
+          new CustomEvent("tapwash:location-updated", {
+            detail: {
+              label: selectedAddress.address_line,
+              addressLine: selectedAddress.address_line,
+              lat: selectedAddress.lat,
+              lng: selectedAddress.lng,
+            },
+          }),
+        );
+      } else {
+        window.dispatchEvent(
+          new CustomEvent("tapwash:location-updated", {
+            detail: {
+              label: "",
+              addressLine: "",
+              cleared: true,
+            },
+          }),
+        );
+      }
       router.refresh();
       notify.success("Address removed.");
     } catch (error) {
@@ -355,7 +399,7 @@ export function LocationPickerSheet() {
         <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-300" />
 
         {mode === "list" ? (
-          <section className="flex min-h-0 flex-1 flex-col gap-3">
+          <section className="scrollbar-hidden flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain pr-0.5">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-black text-[#233f6e]">Select Location</h2>
               <button type="button" onClick={closeSheet} className="rounded-full p-2 text-[#0081c9] hover:bg-white/60" aria-label="Close">
@@ -396,7 +440,7 @@ export function LocationPickerSheet() {
               </p>
             </article>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-2 pb-2">
+            <div className="space-y-2 pb-2">
               {loading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-16 w-full" />
@@ -480,7 +524,7 @@ export function LocationPickerSheet() {
               <h2 className="text-xl font-black text-[#233f6e]">{mode === "create" ? "Add Address" : "Edit Address"}</h2>
             </div>
 
-            <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-3 pr-0.5">
+            <div className="scrollbar-hidden mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-3 pr-0.5">
               <InteractiveLocationMap
                 center={pin ?? center}
                 pin={pin ?? center}

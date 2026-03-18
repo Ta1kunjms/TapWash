@@ -11,6 +11,8 @@ type Props = {
   initialAddress: string;
 };
 
+const SAVED_ADDRESSES_KEY = "tapwash.savedAddresses";
+
 const MAP_BOUNDS = {
   minLat: 6.02,
   maxLat: 6.19,
@@ -72,8 +74,23 @@ export function LocationPicker({ initialAddress }: Props) {
     );
   };
 
+  const persistSavedAddress = (value: string) => {
+    const nextAddress = value.trim();
+    if (!nextAddress || typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem(SAVED_ADDRESSES_KEY);
+      const current = raw ? (JSON.parse(raw) as unknown) : [];
+      const entries = Array.isArray(current) ? current.filter((entry): entry is string => typeof entry === "string") : [];
+      const deduped = [nextAddress, ...entries.filter((entry) => entry !== nextAddress)].slice(0, 12);
+      window.localStorage.setItem(SAVED_ADDRESSES_KEY, JSON.stringify(deduped));
+    } catch {
+      // Ignore storage errors and continue submitting location updates to the server.
+    }
+  };
+
   return (
-    <section className="space-y-4 rounded-2xl border border-border-muted bg-white p-4 shadow-soft">
+    <section className="space-y-4 p-1">
       <div className="grid grid-cols-2 gap-2 rounded-xl bg-background-app p-1">
         <button
           type="button"
@@ -142,7 +159,12 @@ export function LocationPicker({ initialAddress }: Props) {
       <input type="hidden" name="lat" value={coordinates?.lat ?? ""} />
       <input type="hidden" name="lng" value={coordinates?.lng ?? ""} />
 
-      <button type="submit" disabled={isResolving} className="h-11 w-full rounded-xl bg-primary-500 text-sm font-semibold text-white disabled:opacity-70">
+      <button
+        type="submit"
+        onClick={() => persistSavedAddress(address)}
+        disabled={isResolving}
+        className="h-11 w-full rounded-xl bg-primary-500 text-sm font-semibold text-white disabled:opacity-70"
+      >
         {isResolving ? "Resolving map point..." : "Save Location"}
       </button>
     </section>
