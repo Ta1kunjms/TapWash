@@ -1,4 +1,4 @@
-import { geocodeAddress } from "@/lib/delivery-quote";
+import { reverseGeocode } from "@/lib/geocoding";
 import { z } from "zod";
 
 const reverseSchema = z.object({
@@ -18,33 +18,15 @@ export async function GET(request: Request) {
   }
 
   const { lat, lng } = parsed.data;
-  const token = process.env.MAPBOX_ACCESS_TOKEN;
-
-  if (token) {
-    const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?limit=1&access_token=${token}`;
-    const response = await fetch(endpoint, { cache: "no-store" });
-
-    if (response.ok) {
-      const body = (await response.json()) as {
-        features?: Array<{ place_name?: string }>;
-      };
-
-      const placeName = body.features?.[0]?.place_name;
-      if (placeName) {
-        return Response.json({
-          address: placeName,
-          coordinates: { lat, lng },
-        });
-      }
-    }
+  const resolved = await reverseGeocode(lat, lng);
+  if (resolved) {
+    return Response.json(resolved);
   }
 
-  // Keep fallback deterministic when map providers are unavailable.
-  const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}, General Santos City`;
-  const stableCoords = await geocodeAddress(fallback);
+  const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 
   return Response.json({
     address: fallback,
-    coordinates: stableCoords,
+    coordinates: { lat, lng },
   });
 }

@@ -15,6 +15,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid quote payload" }, { status: 400 });
   }
 
-  const quote = await getDeliveryQuote(parsed.data);
-  return Response.json(quote);
+  try {
+    const quote = await getDeliveryQuote(parsed.data);
+    return Response.json(quote);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to calculate quote";
+    return Response.json({ error: message }, { status: 502 });
+  }
 }

@@ -15,6 +15,7 @@ type Props = {
   name: string;
   placeholder: string;
   value: string;
+  proximity?: { lat: number; lng: number } | null;
   onValueChange: (value: string) => void;
   onCoordinateSelect: (coordinates: { lat: number; lng: number } | null) => void;
 };
@@ -24,40 +25,65 @@ export function AddressAutocomplete({
   name,
   placeholder,
   value,
+  proximity,
   onValueChange,
   onCoordinateSelect,
 }: Props) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [requestError, setRequestError] = useState<string>("");
 
   useEffect(() => {
     if (value.trim().length < 3) {
       setSuggestions([]);
+      setRequestError("");
       return;
     }
 
+    const controller = new AbortController();
     const timeoutId = setTimeout(async () => {
       setLoading(true);
+      setRequestError("");
+
+      const params = new URLSearchParams({ q: value.trim() });
+      if (proximity) {
+        params.set("lat", String(proximity.lat));
+        params.set("lng", String(proximity.lng));
+      }
+
       try {
-        const response = await fetch(`/api/maps/suggest?q=${encodeURIComponent(value.trim())}`);
-        if (!response.ok) return;
+        const response = await fetch(`/api/maps/suggest?${params.toString()}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Unable to load suggestions");
         const body = (await response.json()) as { suggestions: Suggestion[] };
         setSuggestions(body.suggestions ?? []);
         setOpen(true);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setSuggestions([]);
+        setRequestError(error instanceof Error ? error.message : "Location search is unavailable.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }, 250);
 
-    return () => clearTimeout(timeoutId);
-  }, [value]);
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [value, proximity]);
 
   const helperText = useMemo(() => {
     if (loading) return "Searching addresses...";
+    if (requestError) return requestError;
     if (open && suggestions.length === 0 && value.trim().length >= 3) return "No suggestions found.";
     return "";
-  }, [loading, open, suggestions.length, value]);
+  }, [loading, requestError, open, suggestions.length, value]);
 
   return (
     <div className="relative">
