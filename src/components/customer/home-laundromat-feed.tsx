@@ -36,7 +36,7 @@ type FeedItem = {
   eta_max: number | null;
   distance_km: number | null;
   service_names: string[];
-  status: "open" | "low_capacity" | "closing_soon" | "busy" | "closed";
+  status: "open" | "low_capacity" | "closing_soon" | "closed";
   status_label: string;
   social_proof: string;
   trust_badges: string[];
@@ -91,7 +91,7 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [recentViews, setRecentViews] = useState<RecentView[]>([]);
-  const [compareIds, setCompareIds] = useState<string[]>([]);
+  // Compare feature removed
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<(() => Promise<void>) | null>(null);
@@ -239,10 +239,7 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
     }
   }, []);
 
-  const comparedShops = useMemo(
-    () => compareIds.map((id) => items.find((item) => item.id === id)).filter((item): item is FeedItem => Boolean(item)),
-    [compareIds, items],
-  );
+  // Compare feature removed
 
   const handleOpenDetail = useCallback((shop: FeedItem) => {
     if (typeof window === "undefined") return;
@@ -264,17 +261,7 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
     }
   }, [recentViews]);
 
-  const toggleCompare = useCallback((shopId: string) => {
-    setCompareIds((current) => {
-      if (current.includes(shopId)) {
-        return current.filter((id) => id !== shopId);
-      }
-      if (current.length >= 3) {
-        return [...current.slice(1), shopId];
-      }
-      return [...current, shopId];
-    });
-  }, []);
+  // Compare feature removed
 
   return (
     <section className="space-y-3 pb-6" id="all-laundromats-feed">
@@ -300,7 +287,8 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
         </div>
       ) : null}
 
-      <div className="flex justify-end mt-2 mb-4">
+      <div className="flex justify-end items-center gap-2 mt-2 mb-4">
+        <span className="text-sm text-text-secondary/70 font-medium">Sort:</span>
         <button
           type="button"
           onClick={cycleSortMode}
@@ -312,31 +300,7 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
         </button>
       </div>
 
-      {comparedShops.length > 0 ? (
-        <div className="rounded-2xl border border-primary-500/20 bg-[#f3f9ff] p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-primary-500">
-              Compare Laundromats ({comparedShops.length}/3)
-            </p>
-            <button
-              type="button"
-              className="text-xs font-semibold text-text-secondary"
-              onClick={() => setCompareIds([])}
-            >
-              Clear
-            </button>
-          </div>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            {comparedShops.map((shop) => (
-              <div key={shop.id} className="rounded-xl border border-border-muted bg-white p-2">
-                <p className="line-clamp-1 text-sm font-bold text-text-secondary">{shop.shop_name}</p>
-                <p className="mt-1 text-xs text-text-muted">⭐ {(shop.rating_avg ?? 0).toFixed(1)} · {shop.eta_max ?? 90} mins</p>
-                <p className="text-xs font-semibold text-primary-500">From P{shop.starting_price.toFixed(2)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {/* Compare feature removed */}
 
       {isLoading ? (
         <div className="space-y-3">
@@ -368,7 +332,7 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
 
       <div className="space-y-3">
         {items.map((shop) => {
-          const inCompare = compareIds.includes(shop.id);
+          // Compare feature removed
           return (
             <article
               key={shop.id}
@@ -429,16 +393,6 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
                   variant="icon"
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-primary-500/15 bg-primary-500/10 text-primary-500"
                 />
-                <button
-                  type="button"
-                  onClick={() => toggleCompare(shop.id)}
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-[10px] font-semibold",
-                    inCompare ? "bg-primary-500 text-white" : "bg-background-app text-text-secondary",
-                  )}
-                >
-                  {inCompare ? "Comparing" : "Compare"}
-                </button>
                 <Link
                   href={`/customer/shops/${shop.id}`}
                   onClick={() => handleOpenDetail(shop)}
@@ -479,7 +433,6 @@ function parseSort(value: string | null, fallback: SortMode): SortMode {
 
 function statusBadgeClass(status: FeedItem["status"]): string {
   if (status === "open") return "rounded-full bg-[#ddf5e9] px-2 py-0.5 text-[10px] font-bold text-[#177245]";
-  if (status === "busy") return "rounded-full bg-[#ffe4d2] px-2 py-0.5 text-[10px] font-bold text-[#c55611]";
   if (status === "closing_soon") return "rounded-full bg-[#fff2ce] px-2 py-0.5 text-[10px] font-bold text-[#af7a03]";
   if (status === "low_capacity") return "rounded-full bg-[#ffe8d6] px-2 py-0.5 text-[10px] font-bold text-[#bf5b09]";
   return "rounded-full bg-[#f1f1f1] px-2 py-0.5 text-[10px] font-bold text-[#555]";

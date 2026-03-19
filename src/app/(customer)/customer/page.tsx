@@ -8,6 +8,7 @@ import { getVerifiedShops } from "@/services/shops";
 import { getCustomerProfile, getInitials } from "@/services/customer";
 import { listFavoriteShopIds } from "@/services/favorites";
 import { getUnreadNotificationCount } from "@/services/notifications";
+
 import Link from "next/link";
 import Image from "next/image";
 
@@ -55,6 +56,180 @@ export default async function CustomerHomePage({
     })
     .slice(0, 5);
 
+
+  // Dynamic greeting messages
+  const greetings = {
+    morning: [
+      "Good morning! Ready for fresh laundry?",
+      "Rise and shine! Laundry day awaits.",
+      "Start your day with fresh clothes!",
+      "A fresh morning for fresh laundry!",
+      "Let’s make your morning brighter with clean laundry.",
+      "Early bird gets the cleanest clothes!",
+      "Good morning! Time to refresh your wardrobe.",
+      "Wake up to a world of clean laundry!",
+      "Kickstart your day with a laundry run!",
+      "Sun’s up, laundry’s on!",
+      "Fresh start, fresh laundry!",
+      "Make your morning sparkle with clean clothes!",
+      "Laundry magic for your morning routine!",
+      "Good morning! Let’s get those clothes spotless.",
+      "A new day, a new load!",
+      "Morning breeze, fresh tees!",
+      "Clean laundry, happy morning!",
+      "Start strong with a laundry refresh!",
+      "Bright mornings, brighter whites!",
+      "Laundry joy to begin your day!",
+      "Rise up, freshen up!",
+      "Morning hustle, laundry bustle!",
+      "Let’s make your morning laundry easy.",
+      "Good morning! Laundry made simple.",
+      "Fresh laundry, fresh mindset!",
+      "Morning routine: coffee, laundry, win!",
+      "Clean clothes, clean slate!",
+      "Laundry love for your morning.",
+      "Start your day the fresh way!",
+      "Laundry done before noon—legendary!",
+      "Good morning! Let’s tackle laundry together.",
+      "A bright day starts with clean laundry.",
+      "Morning motivation: fresh laundry!",
+      "Laundry sorted, day started!",
+      "Good morning! Your laundry awaits.",
+      "Fresh laundry, fresh possibilities!",
+      "Morning made better with clean clothes.",
+      "Laundry first, everything else next!",
+      "Good morning! Let’s get those stains out.",
+      "Start your day with a laundry win!",
+      "Laundry goals: achieved this morning.",
+      "Good morning! Laundry is just a tap away.",
+      "Fresh laundry, fresh energy!",
+      "Morning vibes, laundry tribe!",
+      "Laundry made easy for your morning.",
+      "Good morning! Let’s freshen up your wardrobe.",
+      "Laundry happiness delivered this morning.",
+      "Start your day with a laundry smile!",
+      "Good morning! Clean clothes, happy you.",
+      "Laundry magic, morning edition!"
+    ],
+    afternoon: [
+      "Good afternoon! Laundry made easy.",
+      "Keep your day fresh with clean clothes!",
+      "Afternoon is perfect for a laundry refresh.",
+      "Laundry break? We’ve got you covered!",
+      "Stay fresh all day—let’s do laundry!",
+      "Midday clean, all-day confidence!",
+      "Laundry time: afternoon edition.",
+      "Brighten your afternoon with fresh laundry!",
+      "Take a laundry break this afternoon!",
+      "Clean clothes, happy afternoon!",
+      "Laundry boost for your afternoon!",
+      "Afternoon delight: fresh laundry!",
+      "Laundry made simple, all afternoon.",
+      "Refresh your day with a laundry run!",
+      "Laundry sorted, afternoon rewarded!",
+      "Good afternoon! Let’s freshen up your style.",
+      "Laundry magic for your midday!",
+      "Afternoon hustle, laundry muscle!",
+      "Laundry done, afternoon fun!",
+      "Clean laundry, clear mind!",
+      "Afternoon pick-me-up: laundry!",
+      "Laundry made effortless this afternoon.",
+      "Good afternoon! Laundry is just a tap away.",
+      "Laundry joy for your afternoon routine.",
+      "Afternoon breeze, fresh tees!",
+      "Laundry happiness, afternoon style!",
+      "Laundry break, happiness make!",
+      "Good afternoon! Let’s get those clothes spotless.",
+      "Laundry sorted, day supported!",
+      "Afternoon refresh, laundry success!",
+      "Laundry made easy, all day long.",
+      "Good afternoon! Let’s tackle laundry together.",
+      "Laundry love for your afternoon.",
+      "Afternoon routine: laundry and chill!",
+      "Laundry done, afternoon won!",
+      "Good afternoon! Your laundry awaits.",
+      "Laundry goals: achieved this afternoon.",
+      "Afternoon made better with clean clothes.",
+      "Laundry first, everything else next!",
+      "Good afternoon! Let’s get those stains out.",
+      "Laundry sorted, afternoon started!",
+      "Laundry magic, afternoon edition!",
+      "Good afternoon! Clean clothes, happy you.",
+      "Laundry happiness delivered this afternoon.",
+      "Afternoon vibes, laundry tribe!",
+      "Laundry made easy for your afternoon.",
+      "Good afternoon! Let’s freshen up your wardrobe.",
+      "Laundry smile, afternoon style!",
+      "Laundry boost, afternoon toast!"
+    ],
+    evening: [
+      "Good evening! Unwind with fresh laundry.",
+      "End your day with clean comfort.",
+      "Evenings are for cozy, clean clothes!",
+      "Relax—your laundry is in good hands.",
+      "Wind down with a laundry refresh.",
+      "Laundry tonight, fresh tomorrow!",
+      "Evening laundry, effortless comfort.",
+      "Settle in with freshly cleaned clothes.",
+      "Laundry done, evening won!",
+      "Enjoy your evening—let us handle the laundry!",
+      "Evening breeze, fresh tees!",
+      "Laundry magic for your evening routine!",
+      "Good evening! Let’s get those clothes spotless.",
+      "A cozy night starts with clean laundry.",
+      "Evening comfort, laundry sorted!",
+      "Laundry love for your evening.",
+      "Good evening! Laundry made simple.",
+      "Fresh laundry, peaceful night!",
+      "Evening routine: laundry and relax!",
+      "Laundry sorted, night rewarded!",
+      "Good evening! Let’s tackle laundry together.",
+      "Laundry happiness, evening style!",
+      "Laundry break, happiness make!",
+      "Good evening! Let’s freshen up your style.",
+      "Laundry sorted, night supported!",
+      "Evening refresh, laundry success!",
+      "Laundry made easy, all night long.",
+      "Good evening! Your laundry awaits.",
+      "Laundry goals: achieved this evening.",
+      "Evening made better with clean clothes.",
+      "Laundry first, everything else next!",
+      "Good evening! Let’s get those stains out.",
+      "Laundry sorted, evening started!",
+      "Laundry magic, evening edition!",
+      "Good evening! Clean clothes, happy you.",
+      "Laundry happiness delivered this evening.",
+      "Evening vibes, laundry tribe!",
+      "Laundry made easy for your evening.",
+      "Good evening! Let’s freshen up your wardrobe.",
+      "Laundry smile, evening style!",
+      "Laundry boost, evening toast!",
+      "Laundry done, night won!",
+      "Good evening! Laundry is just a tap away.",
+      "Laundry joy for your evening routine.",
+      "Evening breeze, fresh laundry!",
+      "Laundry happiness, night style!",
+      "Laundry break, night make!",
+      "Good evening! Let’s get those clothes fresh.",
+      "Laundry sorted, night started!"
+    ]
+  };
+
+  function getTimeOfDay(): keyof typeof greetings {
+    const hour = new Date().getHours();
+    if (hour < 12) return "morning";
+    if (hour < 18) return "afternoon";
+    return "evening";
+  }
+
+  function getRandomGreeting(): string {
+    const timeOfDay = getTimeOfDay();
+    const options = greetings[timeOfDay];
+    return options[Math.floor(Math.random() * options.length)];
+  }
+
+  const greetingMessage = getRandomGreeting();
+
   return (
     <main className="space-y-5">
       <MobileTopBar
@@ -69,7 +244,7 @@ export default async function CustomerHomePage({
 
       <section className="space-y-1">
         <h1 className="text-3xl font-bold leading-tight text-primary-500">Hello {firstName}!</h1>
-        <p className="text-lg text-text-secondary/65">Good morning! Ready for fresh laundry?</p>
+        <p className="text-lg text-text-secondary/65">{greetingMessage}</p>
         <div className="mt-3 h-px bg-border-muted" />
       </section>
 
@@ -85,14 +260,8 @@ export default async function CustomerHomePage({
 
       {/* Featured Laundromats section moved below Special Offers */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center">
           <h2 className="text-xl font-bold text-text-secondary/80">Featured Laundromats</h2>
-          <Link
-            href={`/customer?${new URLSearchParams({ q: q ?? "", ...(favoritesOnly ? {} : { favorites: "1" }) }).toString()}`}
-            className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-primary-500"
-          >
-            {favoritesOnly ? "Show All" : "Favorites Only"}
-          </Link>
         </div>
         {featured.length === 0 ? (
           <div className="rounded-2xl border border-border-muted bg-white p-5 text-sm text-text-muted shadow-soft">

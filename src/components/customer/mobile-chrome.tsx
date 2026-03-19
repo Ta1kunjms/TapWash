@@ -25,30 +25,8 @@ export function MobileTopBar({
   liveNotificationCount = true,
 }: MobileTopBarProps) {
   return (
-    <header className="sticky top-0 z-30 -mx-4 mb-4 overflow-hidden rounded-b-[2rem] bg-primary-500 px-4 pb-4 pt-3 text-white shadow-soft">
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        <svg className="block h-full w-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1361.44 595">
-          <defs>
-            <linearGradient id="topbar-water-gradient" x1="680.72" x2="680.72" y1="594.988" y2="0" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#3FA9F0" />
-              <stop offset="0.17" stopColor="#4AAEF1" />
-              <stop offset="0.48" stopColor="#68BBF4" />
-              <stop offset="0.89" stopColor="#97D0F9" />
-              <stop offset="1" stopColor="#A6D6FB" />
-            </linearGradient>
-          </defs>
-          <rect width="1361.44" height="595" fill="url(#topbar-water-gradient)" />
-          <path
-            d="M0 485C37 525 77 503 119 530C157 556 193 512 232 531C272 551 303 500 343 526C383 553 421 501 460 531C500 562 536 510 576 526C616 542 649 500 689 531C730 562 764 503 805 531C846 559 881 504 921 525C961 546 996 498 1038 529C1079 560 1117 508 1156 530C1195 552 1232 510 1272 525C1306 538 1334 527 1361.44 511V595H0V485Z"
-            fill="#F4FAFF"
-          />
-          <circle cx="317" cy="536" r="7" fill="#9ED1FA" />
-          <circle cx="352" cy="544" r="5" fill="#9ED1FA" />
-          <circle cx="562" cy="537" r="6" fill="#9ED1FA" />
-          <circle cx="960" cy="544" r="5" fill="#9ED1FA" />
-          <circle cx="1122" cy="539" r="7" fill="#9ED1FA" />
-        </svg>
-      </div>
+    <header className="relative z-30 -mx-4 mb-4 overflow-hidden bg-transparent px-4 pb-4 pt-3 text-primary-700 shadow-soft">
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[url('/Bubbles.svg')] bg-bottom bg-no-repeat bg-cover" />
 
       <div className="relative">
         <div className="mb-3 flex items-center justify-between">
@@ -56,7 +34,7 @@ export function MobileTopBar({
           <LocationSheetTrigger locationLabel={locationLabel} />
           <Link
             href="/customer/settings/profile"
-            className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 bg-white/30 text-xs font-bold"
+            className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-primary-500/35 bg-white/80 text-xs font-bold text-primary-700"
             aria-label="My profile"
           >
             {profileInitials}

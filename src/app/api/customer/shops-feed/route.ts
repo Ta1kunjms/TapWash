@@ -30,7 +30,7 @@ type FeedShop = {
   lng: number | null;
   distance_km: number | null;
   service_names: string[];
-  status: "open" | "low_capacity" | "closing_soon" | "busy" | "closed";
+  status: "open" | "low_capacity" | "closing_soon" | "closed";
   status_label: string;
   social_proof: string;
   trust_badges: string[];
@@ -97,7 +97,7 @@ function computeStatus(shop: {
   if (!isOpen) return { status: "closed", label: "Closed" };
   if (hour >= 19) return { status: "closing_soon", label: "Closing Soon" };
   if (shop.load_capacity_kg <= 6) return { status: "low_capacity", label: "Low Capacity" };
-  if ((shop.rating_avg ?? 0) >= 4.7 && (shop.total_reviews ?? 0) >= 80) return { status: "busy", label: "Busy" };
+  // Removed 'busy' status and label
   if ((shop.eta_max ?? 90) <= 45) return { status: "open", label: "Fast Service" };
 
   return { status: "open", label: "Open" };
