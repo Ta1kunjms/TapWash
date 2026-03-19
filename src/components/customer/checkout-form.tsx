@@ -65,7 +65,6 @@ type CheckoutBucketEstimate = {
   estimate: ReturnType<typeof calculateServiceEstimate>;
 };
 
-const tipOptions = [0, 20, 50, 100];
 const SAVED_ADDRESSES_KEY = "tapwash.savedAddresses";
 
 export function CheckoutForm({
@@ -132,6 +131,10 @@ export function CheckoutForm({
   const [showManualAddressFields, setShowManualAddressFields] = useState(
     () => !initialSelectedAddress && (initialSavedAddresses?.length ?? 0) === 0,
   );
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+  const [promoDiscount, setPromoDiscount] = useState<number>(0);
+  const [resolvedPromoCode, setResolvedPromoCode] = useState<string | null>(null);
   const selectableAddresses = useMemo(
     () => uniqueAddresses([pickupAddress, dropoffAddress, ...savedAddresses]),
     [dropoffAddress, pickupAddress, savedAddresses],
@@ -195,7 +198,8 @@ export function CheckoutForm({
   const subtotal = Number(bucketEstimates.reduce((sum, entry) => sum + entry.estimate.subtotal, 0).toFixed(2));
   const totalLoads = bucketEstimates.reduce((sum, entry) => sum + entry.loads, 0);
   const totalWeight = Number(bucketEstimates.reduce((sum, entry) => sum + entry.weightKg, 0).toFixed(1));
-  const total = Number((subtotal + deliveryFee + tipAmount).toFixed(2));
+  const totalBeforeDiscount = Number((subtotal + deliveryFee + tipAmount).toFixed(2));
+  const total = Number(Math.max(0, totalBeforeDiscount - promoDiscount).toFixed(2));
   const isCheckoutReady = Boolean(
     selectedShop?.id &&
       bucketEstimates.length > 0 &&
@@ -206,6 +210,54 @@ export function CheckoutForm({
       deliveryDate &&
       hasRouteQuote,
   );
+
+  useEffect(() => {
+    const normalizedPromoCode = promoCode.trim().toUpperCase();
+
+    if (!normalizedPromoCode) {
+      setPromoDiscount(0);
+      setResolvedPromoCode(null);
+      return;
+    }
+
+    let isActive = true;
+    const timeoutId = setTimeout(async () => {
+      try {
+        const response = await fetch("/api/vouchers/estimate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            code: normalizedPromoCode,
+            subtotal,
+          }),
+        });
+
+        if (!response.ok) {
+          if (isActive) {
+            setPromoDiscount(0);
+            setResolvedPromoCode(null);
+          }
+          return;
+        }
+
+        const result = (await response.json()) as { promoCode: string | null; discount: number };
+        if (!isActive) return;
+
+        setPromoDiscount(Number((result.discount ?? 0).toFixed(2)));
+        setResolvedPromoCode(result.promoCode);
+      } catch {
+        if (isActive) {
+          setPromoDiscount(0);
+          setResolvedPromoCode(null);
+        }
+      }
+    }, 300);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeoutId);
+    };
+  }, [promoCode, subtotal]);
 
   useEffect(() => {
     if (!canRequestQuote) return;
@@ -405,46 +457,10 @@ export function CheckoutForm({
         </div>
       </section>
 
-      <section className="rounded-[1.6rem] border border-[#c8dbea] bg-white/92 p-4 shadow-[0_10px_24px_rgba(92,128,160,0.15)]">
-        <div className="rounded-[1.2rem] border border-dashed border-[#9fc8e7] bg-[linear-gradient(180deg,#fcfeff_0%,#f2f8ff_100%)] p-4">
-          <div className="flex items-center justify-between border-b border-dashed border-[#cbe1f2] pb-2">
-            <p className="text-[0.72rem] font-black uppercase tracking-[0.18em] text-[#7aaed3]">Order receipt</p>
-            <p className="text-[0.72rem] font-bold text-[#2f8ecf]">#{selectedShop.id.slice(0, 6).toUpperCase()}</p>
-          </div>
 
-          <div className="mt-3 space-y-2.5">
-            {bucketEstimates.map((entry) => (
-              <div key={entry.serviceId} className="flex items-start justify-between gap-3 border-b border-dashed border-[#d8e8f4] pb-2">
-                <div>
-                  <p className="text-sm font-black text-[#255375]">{entry.service.name}</p>
-                  <p className="mt-0.5 text-[0.72rem] font-semibold text-[#7aaed3]">
-                    {entry.loads} {entry.loads === 1 ? "load" : "loads"} · {entry.weightKg.toFixed(1)} kg
-                  </p>
-                  <p className="mt-0.5 text-[0.68rem] text-[#8bb3d0]">{formatServiceRateLabel(entry.service)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-black text-[#1f8fd6]">{formatCurrency(entry.estimate.subtotal)}</p>
-                  {entry.estimate.optionsTotal > 0 ? (
-                    <p className="mt-0.5 text-[0.66rem] font-semibold text-[#7aaed3]">with care prefs</p>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Unified receipt card moved to end of page */}
 
-          <div className="mt-3 space-y-1.5 text-[0.78rem]">
-            <SummaryRow label="Items" value={`${bucketEstimates.length}`} />
-            <SummaryRow label="Total loads" value={`${totalLoads}`} />
-            <SummaryRow label="Total weight" value={`${totalWeight.toFixed(1)} kg`} />
-            <SummaryRow label="Laundry base" value={formatCurrency(basePrice)} />
-            {optionsTotal > 0 ? <SummaryRow label="Care preferences" value={formatCurrency(optionsTotal)} /> : null}
-            <div className="h-px bg-[#dbe7f1]" />
-            <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} strong />
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-[1.6rem] border border-[#bfd7e8] bg-white p-4 shadow-[0_14px_30px_rgba(92,128,160,0.16)]">
+      <section className="mt-4">
         <div className="mb-4">
           <p className="text-[0.72rem] font-black uppercase tracking-[0.18em] text-[#7aaed3]">Delivery details</p>
           <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Pickup and delivery schedule</h2>
@@ -568,23 +584,7 @@ export function CheckoutForm({
             </>
           ) : null}
 
-          <div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-text-secondary">Contact number</label>
-              <Input
-                required
-                name="contactPhoneDisplay"
-                value={contactPhone}
-                onChange={(event) => setContactPhone(sanitizePhoneInput(event.target.value))}
-                placeholder="09XXXXXXXXX"
-                inputMode="tel"
-                className="h-12 rounded-[1rem] border-[#cae4f8] bg-[#f9fdff]"
-              />
-              {contactPhone.trim().length > 0 && !normalizedContactPhone ? (
-                <p className="mt-1 text-xs text-red-500">Enter a valid PH mobile number (e.g., 09XXXXXXXXX or +63XXXXXXXXXX).</p>
-              ) : null}
-            </div>
-          </div>
+
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-xs font-semibold text-text-secondary">
@@ -628,51 +628,113 @@ export function CheckoutForm({
         </div>
       </section>
 
-      <section className="rounded-[1.6rem] border border-[#bfd7e8] bg-white p-4 shadow-[0_14px_30px_rgba(92,128,160,0.16)]">
+      <section className="rounded-[1.35rem] border border-[#d5e3ee] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
         <div className="mb-4">
-          <p className="text-[0.72rem] font-black uppercase tracking-[0.18em] text-[#7aaed3]">Payment</p>
-          <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Tip and payment method</h2>
+          <p className="text-[0.72rem] font-black uppercase tracking-[0.18em] text-[#7aaed3]">Tips</p>
+          <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Tip your rider</h2>
+          <p className="mt-1 text-[0.78rem] font-semibold text-[#7a97ad]">
+            100% of the tips go to your rider, we don&apos;t deduct anything from it.
+          </p>
         </div>
 
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-xs font-semibold text-text-secondary">Rider tip</label>
-            <div className="flex flex-wrap gap-2">
-              {tipOptions.map((option) => (
+          <div className="flex flex-wrap gap-2">
+            {[0, 5, 20, 40, 80].map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  setTipAmount(option);
+                  setCustomTip("");
+                }}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-[0.76rem] font-black transition",
+                  tipAmount === option && customTip === ""
+                    ? "border-[#2f8ecf] bg-[#2f8ecf] text-white"
+                    : "border-[#d8e5ef] bg-[#f6fbff] text-[#4f6d84]",
+                )}
+              >
+                {option === 0 ? "Not now" : formatCurrency(option)}
+              </button>
+            ))}
+          </div>
+
+          <label className="mt-2 block text-xs font-semibold text-text-secondary">
+            Custom tip
+            <Input
+              value={customTip}
+              onChange={(event) => {
+                const nextValue = event.target.value.replace(/[^0-9.]/g, "");
+                setCustomTip(nextValue);
+                setTipAmount(Number(nextValue || 0));
+              }}
+              placeholder="0.00"
+              inputMode="decimal"
+              className="mt-2 h-11 rounded-[0.9rem] border-[#d8e5ef] bg-[#f8fcff]"
+            />
+          </label>
+
+          <label className="inline-flex items-center gap-2 text-[0.78rem] font-semibold text-[#5c7b93]">
+            <input type="checkbox" className="h-4 w-4 rounded border-[#c8dbea] text-[#2f8ecf]" />
+            Save for your next order
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-black text-[#2c4f74]">Payment method</h2>
+          <button
+            type="button"
+            onClick={() => setShowPaymentOptions((current) => !current)}
+            className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.74rem] font-black text-[#2f8ecf]"
+          >
+            Change
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-[1rem] border border-[#d9e7f2] bg-[#f8fcff] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#1f8fd6] text-[0.62rem] font-black text-white">
+                  {paymentMethod === "gcash" ? "GC" : paymentMethod === "card" ? "CC" : "COD"}
+                </span>
+                <div>
+                  <p className="text-[0.84rem] font-black text-[#2f5878]">{formatPaymentMethodLabel(paymentMethod)}</p>
+                  <p className="text-[0.72rem] font-semibold text-[#7a97ad]">{formatPaymentMethodHint(paymentMethod, normalizedContactPhone)}</p>
+                </div>
+              </div>
+              <p className="text-[0.84rem] font-black text-[#2f5878]">{formatCurrency(total)}</p>
+            </div>
+          </div>
+
+          {showPaymentOptions ? (
+            <div className="flex flex-wrap gap-2 rounded-[0.95rem] border border-[#dbe7f1] bg-[#fbfdff] p-2.5">
+              {([
+                { value: "cod", label: "Cash on Delivery" },
+                { value: "gcash", label: "GCash" },
+                { value: "card", label: "Card" },
+              ] as const).map((option) => (
                 <button
-                  key={option}
+                  key={option.value}
                   type="button"
                   onClick={() => {
-                    setTipAmount(option);
-                    setCustomTip("");
+                    setPaymentMethod(option.value);
+                    setShowPaymentOptions(false);
                   }}
                   className={cn(
-                    "rounded-full px-4 py-2 text-sm font-black transition",
-                    tipAmount === option && customTip === ""
-                      ? "bg-[#2196f3] text-white"
-                      : "bg-[#edf7ff] text-[#1f8fd6]",
+                    "rounded-full border px-3 py-1.5 text-[0.76rem] font-black transition",
+                    paymentMethod === option.value
+                      ? "border-[#2f8ecf] bg-[#2f8ecf] text-white"
+                      : "border-[#d8e5ef] bg-[#f6fbff] text-[#4f6d84]",
                   )}
                 >
-                  {option === 0 ? "No tip" : formatCurrency(option)}
+                  {option.label}
                 </button>
               ))}
             </div>
-
-            <label className="mt-3 block text-xs font-semibold text-text-secondary">
-              Custom tip
-              <Input
-                value={customTip}
-                onChange={(event) => {
-                  const nextValue = event.target.value.replace(/[^0-9.]/g, "");
-                  setCustomTip(nextValue);
-                  setTipAmount(Number(nextValue || 0));
-                }}
-                placeholder="0.00"
-                inputMode="decimal"
-                className="mt-2 h-12 rounded-[1rem] border-[#cae4f8] bg-[#f9fdff]"
-              />
-            </label>
-          </div>
+          ) : null}
 
           <label className="block text-xs font-semibold text-text-secondary">
             Voucher code
@@ -685,38 +747,100 @@ export function CheckoutForm({
             />
           </label>
 
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-text-secondary">Payment method</label>
-            <select
-              name="paymentMethod"
-              value={paymentMethod}
-              onChange={(event) => setPaymentMethod(event.target.value as "cod" | "gcash" | "card")}
-              className="h-12 w-full rounded-[1rem] border border-[#cae4f8] bg-[#f9fdff] px-3 text-sm font-semibold text-[#0d4b78] outline-none"
-            >
-              <option value="cod">Cash on Delivery</option>
-              <option value="gcash">GCash</option>
-              <option value="card">Card</option>
-            </select>
-          </div>
         </div>
       </section>
 
-      <section className="rounded-[1.2rem] border border-[#c7d9e8] bg-white px-4 py-3.5 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
-        <div className="space-y-2 text-sm">
-          <SummaryRow label="Laundry base" value={formatCurrency(basePrice)} />
-          {optionsTotal > 0 ? <SummaryRow label="Care options" value={formatCurrency(optionsTotal)} /> : null}
-          <SummaryRow label="Bucket items" value={`${bucketEstimates.length}`} />
-          <SummaryRow label="Delivery fee" value={formatCurrency(deliveryFee)} />
+      <section id="order-summary" className="rounded-[1.1rem] border border-[#c7d9e8] bg-white px-4 py-3.5 shadow-[0_8px_18px_rgba(92,128,160,0.12)] mt-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[0.98rem] font-black text-[#2f5878]">Order summary</h2>
+          <span className="text-[0.78rem] font-bold text-[#7a98ae]">#{selectedShop.id.slice(0, 6).toUpperCase()}</span>
+        </div>
+
+        <div className="mt-2 flex items-start justify-between gap-3">
+          <p className="text-[0.76rem] font-semibold text-[#6d90aa]">
+            {bucketEstimates.length > 0
+              ? `${totalLoads} x ${bucketEstimates[0]?.service.name}${bucketEstimates.length > 1 ? ` +${bucketEstimates.length - 1} more` : ""}`
+              : "No selected services"}
+          </p>
+          <p className="text-[0.78rem] font-bold text-[#6d90aa]">{formatCurrency(subtotal)}</p>
+        </div>
+
+        <div className="mt-3 space-y-1.5 border-t border-[#dbe7f1] pt-2.5 text-[0.82rem]">
+          <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
+          <SummaryRow label="Standard delivery" value={formatCurrency(deliveryFee)} />
+          {optionsTotal > 0 ? <SummaryRow label="Service fee" value={formatCurrency(optionsTotal)} /> : null}
           <SummaryRow label="Tip" value={formatCurrency(tipAmount)} />
-          <div className="h-px bg-[#dbe7f1]" />
-          <SummaryRow label="Estimated total" value={formatCurrency(total)} strong />
+          {promoDiscount > 0 ? <SummaryRow label="Promo savings" value={`-${formatCurrency(promoDiscount)}`} /> : null}
         </div>
       </section>
+
+      {isSummaryOpen ? (
+        <div
+          className="fixed inset-0 z-40 bg-[#0b2b43]/35 px-4"
+          onClick={() => setIsSummaryOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-[1.4rem] border border-[#c7d9e8] bg-white p-4 shadow-[0_-10px_28px_rgba(33,126,191,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Order summary details"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-[#dbe7f1] pb-2.5">
+              <h3 className="text-[1rem] font-black text-[#2f5878]">Order summary</h3>
+              <button
+                type="button"
+                onClick={() => setIsSummaryOpen(false)}
+                className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.72rem] font-black text-[#2f8ecf]"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-2 text-[0.88rem]">
+              {bucketEstimates.length > 0 ? (
+                <div className="mb-2 space-y-1.5 rounded-[0.9rem] border border-[#dbe7f1] bg-[#f7fbff] p-2.5">
+                  {bucketEstimates.map((entry) => (
+                    <div key={entry.serviceId} className="flex items-start justify-between gap-2 text-[0.82rem]">
+                      <span className="font-semibold text-[#4c6d87]">
+                        {entry.loads}x {entry.service.name}
+                      </span>
+                      <span className="font-bold text-[#2f8ecf]">{formatCurrency(entry.estimate.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
+              <SummaryRow label="Standard delivery" value={formatCurrency(deliveryFee)} />
+              {optionsTotal > 0 ? <SummaryRow label="Service fee" value={formatCurrency(optionsTotal)} /> : null}
+              <SummaryRow label="Tip" value={formatCurrency(tipAmount)} />
+              <SummaryRow label="Fees and tax" value="Included" />
+              {promoDiscount > 0 ? <SummaryRow label="Promo savings" value={`-${formatCurrency(promoDiscount)}`} /> : null}
+              {distanceKm !== null ? <SummaryRow label="Distance" value={`${distanceKm.toFixed(1)} km`} /> : null}
+              {etaMin !== null && etaMax !== null ? <SummaryRow label="ETA" value={`${etaMin}-${etaMax} mins`} /> : null}
+              <SummaryRow label="Payment" value={formatPaymentMethodLabel(paymentMethod)} />
+              {promoCode.trim()
+                ? (
+                  <SummaryRow
+                    label="Promo code"
+                    value={resolvedPromoCode ? `${resolvedPromoCode} applied` : `${promoCode.trim().toUpperCase()} not eligible`}
+                  />
+                )
+                : null}
+              <div className="h-px bg-[#dbe7f1]" />
+              <SummaryRow label="Total payable" value={formatCurrency(total)} strong />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <input type="hidden" name="bucket" value={JSON.stringify(initialBucketSelections)} />
       <input type="hidden" name="shopId" value={selectedShop.id} />
       <input type="hidden" name="serviceId" value={selectedService.id} />
       <input type="hidden" name="contactPhone" value={normalizedContactPhone ?? contactPhone.trim()} />
+      <input type="hidden" name="paymentMethod" value={paymentMethod} />
       <input type="hidden" name="pickupDate" value={pickupDate} />
       <input type="hidden" name="deliveryDate" value={deliveryDate} />
       <input type="hidden" name="weightEstimate" value={totalWeight} />
@@ -743,27 +867,56 @@ export function CheckoutForm({
       <input type="hidden" name="distanceKm" value={distanceKm ?? ""} />
       <input type="hidden" name="etaMinutes" value={etaMax ?? ""} />
 
-      <CheckoutSubmitButton disabled={!isCheckoutReady} />
+      <CheckoutSubmitButton
+        disabled={!isCheckoutReady}
+        total={total}
+        onSeeSummary={() => setIsSummaryOpen(true)}
+      />
     </form>
   );
 }
 
-function CheckoutSubmitButton({ disabled }: { disabled: boolean }) {
+function CheckoutSubmitButton({
+  disabled,
+  total,
+  onSeeSummary,
+}: {
+  disabled: boolean;
+  total: number;
+  onSeeSummary: () => void;
+}) {
   const { pending } = useFormStatus();
 
   return (
-    <div className="fixed left-0 right-0 bottom-[max(0.85rem,env(safe-area-inset-bottom))] z-30 px-4 pointer-events-none">
-      <Button
-        type="submit"
-        className={cn(
-          "block pointer-events-auto h-12 w-full rounded-full bg-[#43a9eb] px-8 text-center text-[1.2rem] font-bold leading-none text-white shadow-[0_12px_26px_rgba(33,126,191,0.35)] transition hover:bg-[#389fdf]",
-          disabled && "opacity-70",
-        )}
-        disabled={disabled || pending}
-        style={{ borderRadius: '9999px' }}
-      >
-        {pending ? "Booking..." : disabled ? "Complete details" : "Book Now"}
-      </Button>
+    <div className="fixed left-0 right-0 bottom-0 z-30 pointer-events-none">
+      <div className="pointer-events-auto w-full bg-gradient-to-b from-[#eaf5ff] to-[#d6eafd] shadow-[0_-8px_32px_0_rgba(33,126,191,0.18),0_-1.5px_0_0_#c7d9e8] pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col items-stretch">
+        <div className="flex items-center justify-between mb-3 px-4">
+          <div className="flex flex-col leading-tight">
+            <span className="text-[1.08rem] text-[#217ebf]">
+              <span className="font-bold">Total</span>
+              <span className="font-medium ml-1 text-[#5d7e97]">(incl. fees and tax)</span>
+            </span>
+            <button
+              type="button"
+              onClick={onSeeSummary}
+              className="mt-0.5 w-fit text-[0.78rem] font-semibold text-[#2f8ecf] hover:underline"
+            >
+              See summary
+            </button>
+          </div>
+          <span className="text-[1.08rem] font-bold text-[#43a9eb]">{formatCurrency(total)}</span>
+        </div>
+        <Button
+          type="submit"
+          className={cn(
+            "mx-4 flex h-12 items-center justify-center rounded-full bg-[#43a9eb] px-8 text-center text-[1.2rem] font-bold leading-none text-white shadow-[0_12px_26px_rgba(33,126,191,0.35)] transition hover:bg-[#389fdf]",
+            disabled && "opacity-70",
+          )}
+          disabled={disabled || pending}
+        >
+          {pending ? "Booking..." : disabled ? "Complete details" : "Book Now"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -783,6 +936,31 @@ function clampWeight(value: number) {
 
 function formatCurrency(value: number) {
   return `₱${value.toFixed(2)}`;
+}
+
+function formatPaymentMethodLabel(method: "cod" | "gcash" | "card") {
+  switch (method) {
+    case "cod":
+      return "Cash on Delivery";
+    case "gcash":
+      return "GCash";
+    case "card":
+      return "Card";
+    default:
+      return "Cash on Delivery";
+  }
+}
+
+function formatPaymentMethodHint(method: "cod" | "gcash" | "card", normalizedContactPhone: string | null) {
+  if (method === "gcash") {
+    return normalizedContactPhone ?? "63-9***-****";
+  }
+
+  if (method === "card") {
+    return "**** **** **** 4242";
+  }
+
+  return "Pay when rider arrives";
 }
 
 const TIME_SLOTS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];

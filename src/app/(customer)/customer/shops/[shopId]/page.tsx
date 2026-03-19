@@ -92,7 +92,7 @@ export default async function CustomerShopDetailPage({
         {/* Overlay controls */}
         <div className="absolute inset-x-4 top-5 flex items-center justify-between">
           <Link
-            href="/customer/shops"
+            href="/customer"
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/85 text-primary-500 shadow-sm backdrop-blur-sm"
             aria-label="Go back"
           >

@@ -268,7 +268,7 @@ export default async function CustomerHomePage({
             {favoritesOnly ? "No favorite laundromats yet." : "No verified shops yet."}
           </div>
         ) : (
-          <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">
+          <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1 scrollbar-hidden">
             {featured.map((shop) => (
               <article
                 key={shop.id}

@@ -9,6 +9,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRecentViews } from "@/hooks/use-recent-views";
 
 type SortMode =
   | "alphabetical_asc"
@@ -50,12 +51,6 @@ type FeedResponse = {
   hasMore: boolean;
 };
 
-type RecentView = {
-  id: string;
-  name: string;
-  viewedAt: number;
-};
-
 type Props = {
   initialQuery?: string;
   userLat: number | null;
@@ -64,7 +59,6 @@ type Props = {
 };
 
 const DEFAULT_LIMIT = 8;
-const RECENT_KEY = "tapwash_recently_viewed_shops";
 
 const SORT_OPTIONS: Array<{ value: SortMode; label: string }> = [
   { value: "alphabetical_asc", label: "Alphabetical A-Z" },
@@ -90,8 +84,8 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
-  const [recentViews, setRecentViews] = useState<RecentView[]>([]);
-  // Compare feature removed
+
+  const { addRecentView } = useRecentViews();
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<(() => Promise<void>) | null>(null);
@@ -225,41 +219,9 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(RECENT_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as RecentView[];
-      if (Array.isArray(parsed)) {
-        setRecentViews(parsed.slice(0, 8));
-      }
-    } catch {
-      setRecentViews([]);
-    }
-  }, []);
-
-  // Compare feature removed
-
   const handleOpenDetail = useCallback((shop: FeedItem) => {
-    if (typeof window === "undefined") return;
-
-    const nextRecent = [
-      { id: shop.id, name: shop.shop_name, viewedAt: Date.now() },
-      ...recentViews.filter((item) => item.id !== shop.id),
-    ].slice(0, 8);
-
-    setRecentViews(nextRecent);
-
-    try {
-      window.localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
-      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-        navigator.vibrate(12);
-      }
-    } catch {
-      // Ignore local storage failures.
-    }
-  }, [recentViews]);
+    addRecentView({ id: shop.id, name: shop.shop_name });
+  }, [addRecentView]);
 
   // Compare feature removed
 
@@ -269,23 +231,6 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
         <h2 className="text-xl font-bold text-text-secondary/80">All Laundromats Near You</h2>
         <p className="text-sm text-text-muted">Discover, compare, and choose from every laundromat on TapWash.</p>
       </div>
-
-      {recentViews.length > 0 ? (
-        <div className="rounded-2xl border border-border-muted bg-white p-3 shadow-soft">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Recently Viewed</p>
-          <div className="mt-2 flex snap-x gap-2 overflow-x-auto pb-1">
-            {recentViews.map((item) => (
-              <Link
-                key={item.id}
-                href={`/customer/shops/${item.id}`}
-                className="snap-start whitespace-nowrap rounded-full bg-background-app px-3 py-1.5 text-xs font-semibold text-text-secondary"
-              >
-                {item.name}
-              </Link>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       <div className="flex justify-end items-center gap-2 mt-2 mb-4">
         <span className="text-sm text-text-secondary/70 font-medium">Sort:</span>
