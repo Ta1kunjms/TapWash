@@ -35,6 +35,4 @@
 <path d="M0 0H1404V440H0V0Z" fill="#54B2F2"/>
 <path d="M0 398H37V479H0V398Z" fill="#54B2F2"/>
 <path d="M1367 398H1404V479H1367V398Z" fill="#54B2F2"/>
-<!-- Add blue rectangle at the bottom to fill under the bubbles -->
-<rect x="0" y="479" width="1404" height="45" fill="#54B2F2" />
 </svg>

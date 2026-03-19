@@ -19,13 +19,13 @@ export function MobileTopBar({
   searchValue,
   searchAction = "/customer",
   searchHiddenFields,
-  locationLabel = "Brgy. Tambler, GSC",
+  locationLabel = "Choose Location",
   profileInitials = "TW",
   notificationCount = 0,
   liveNotificationCount = true,
 }: MobileTopBarProps) {
   return (
-    <header className="relative z-30 -mx-4 mb-4 overflow-hidden bg-transparent px-4 pb-4 pt-3 text-primary-700 shadow-soft">
+    <header className="sticky top-0 z-30 -mx-4 mb-4 overflow-hidden bg-transparent px-4 pb-4 pt-3 text-white shadow-soft">
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-[url('/Bubbles.svg')] bg-bottom bg-no-repeat bg-cover" />
 
       <div className="relative">

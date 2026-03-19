@@ -15,6 +15,8 @@ import brandAsset from "../../Logo/Asset 16@300x.png";
 type Mode = "signin" | "signup" | "forgot-password";
 
 export function AuthForm({ mode }: { mode: Mode }) {
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
@@ -159,6 +161,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             />
           )}
 
+
           {isSignup && (
             <>
               <Input
@@ -184,26 +187,48 @@ export function AuthForm({ mode }: { mode: Mode }) {
                 placeholder="Email address"
                 className="h-11 rounded-xl bg-white shadow-sm"
               />
-              <Input
-                required
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm password"
-                className="h-11 rounded-xl bg-white shadow-sm"
-              />
+              <div className="relative">
+                <Input
+                  required
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm password"
+                  className="h-11 rounded-xl bg-white shadow-sm pr-12"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-primary-400 hover:text-primary-600"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  <i className={`fi fi-rr-${showConfirmPassword ? 'eye-crossed' : 'eye'} text-lg`} />
+                </button>
+              </div>
             </>
           )}
 
           {!isForgot && (
-            <Input
-              required
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="h-11 rounded-xl bg-white shadow-sm"
-            />
+            <div className="relative">
+              <Input
+                required
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className="h-11 rounded-xl bg-white shadow-sm pr-12"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-primary-400 hover:text-primary-600"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <i className={`fi fi-rr-${showPassword ? 'eye-crossed' : 'eye'} text-lg`} />
+              </button>
+            </div>
           )}
 
           {isForgot && (
