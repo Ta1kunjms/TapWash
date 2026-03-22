@@ -190,6 +190,25 @@ export function AuthForm({ mode }: { mode: Mode }) {
               <div className="relative">
                 <Input
                   required
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  className="h-11 rounded-xl bg-white shadow-sm pr-12"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-primary-400 hover:text-primary-600"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  <i className={`fi fi-rr-${showPassword ? 'eye-crossed' : 'eye'} text-lg`} />
+                </button>
+              </div>
+              <div className="relative">
+                <Input
+                  required
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -209,7 +228,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             </>
           )}
 
-          {!isForgot && (
+          {!isForgot && !isSignup && (
             <div className="relative">
               <Input
                 required
