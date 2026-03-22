@@ -127,6 +127,12 @@ export default async function CustomerRequestsPage({
                 </div>
                 <p className="mt-2 text-sm text-text-secondary">Pickup: {new Date(order.pickup_date).toLocaleString()}</p>
                 <p className="mt-1 text-xs text-text-muted">Total: ₱{order.total_price} · Payment: {order.payment_method}</p>
+                <Link
+                  href={`/customer/requests/${encodeURIComponent(order.id)}`}
+                  className="mt-3 inline-flex h-9 items-center rounded-xl bg-primary-500 px-3 text-xs font-semibold text-white"
+                >
+                  Track Laundry
+                </Link>
                 </article>
               );
             })}

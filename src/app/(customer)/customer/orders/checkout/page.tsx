@@ -15,13 +15,13 @@ type CheckoutBucketSelection = {
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; shopId?: string; serviceId?: string; weight?: string; promoCode?: string; error?: string; bucket?: string }>;
+  searchParams: Promise<{ q?: string; shopId?: string; serviceId?: string; weight?: string; promoCode?: string; error?: string; errorDetail?: string; bucket?: string }>;
 }) {
   const role = await getCurrentUserRole();
   if (!role) redirect("/login");
   if (role !== "customer") redirect(roleToPath(role));
 
-  const { q, shopId, serviceId, weight, promoCode, bucket } = await searchParams;
+  const { q, shopId, serviceId, weight, promoCode, error, errorDetail, bucket } = await searchParams;
   const [selectedAddress, savedAddresses] = await Promise.all([
     getSelectedCustomerAddress(),
     listCustomerAddresses(),
@@ -44,6 +44,16 @@ export default async function CheckoutPage({
             <FlaticonIcon name="info" className="text-base" />
             {loadError}
           </p>
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <FlaticonIcon name="triangle-warning" className="text-base" />
+            {error}
+          </p>
+          {errorDetail ? <p className="mt-1 text-xs font-medium text-rose-600/90">Details: {errorDetail}</p> : null}
         </div>
       ) : null}
 

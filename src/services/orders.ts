@@ -272,3 +272,109 @@ export async function getMyOrders() {
   if (error) throw error;
   return data;
 }
+
+export async function getMyOrderTrackingDetails(orderId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error("Unauthorized");
+  }
+
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select(
+      "id, customer_id, shop_id, service_id, status, pickup_date, delivery_date, total_price, payment_method, payment_reference, promo_code, discount_amount, tip_amount, delivery_fee, distance_km, eta_minutes, dropoff_address, pickup_address, created_at, laundry_shops(shop_name, location), services(name)",
+    )
+    .eq("id", orderId)
+    .eq("customer_id", user.id)
+    .maybeSingle();
+
+  if (orderError) {
+    throw orderError;
+  }
+
+  if (!order) {
+    return null;
+  }
+
+  const { data: delivery } = await supabase
+    .from("deliveries")
+    .select("status, eta_minutes, rider_id, assigned_at")
+    .eq("order_id", order.id)
+    .maybeSingle();
+
+  const { data: riderLocation } = await supabase
+    .from("rider_locations")
+    .select("lat, lng, updated_at")
+    .eq("order_id", order.id)
+    .maybeSingle();
+
+  let riderName: string | null = null;
+  let riderPhone: string | null = null;
+
+  if (delivery?.rider_id) {
+    const { data: rider } = await supabase
+      .from("riders")
+      .select("profile_id")
+      .eq("id", delivery.rider_id)
+      .maybeSingle();
+
+    if (rider?.profile_id) {
+      const { data: riderProfile } = await supabase
+        .from("profiles")
+        .select("full_name, phone")
+        .eq("id", rider.profile_id)
+        .maybeSingle();
+
+      riderName = riderProfile?.full_name ?? null;
+      riderPhone = riderProfile?.phone ?? null;
+    }
+  }
+
+  const shop = Array.isArray(order.laundry_shops) ? order.laundry_shops[0] : order.laundry_shops;
+  const service = Array.isArray(order.services) ? order.services[0] : order.services;
+
+  return {
+    order: {
+      id: order.id,
+      shopId: order.shop_id,
+      serviceId: order.service_id,
+      status: order.status,
+      pickupDate: order.pickup_date,
+      deliveryDate: order.delivery_date,
+      totalPrice: order.total_price,
+      paymentMethod: order.payment_method,
+      paymentReference: order.payment_reference,
+      promoCode: order.promo_code,
+      discountAmount: order.discount_amount,
+      tipAmount: order.tip_amount,
+      deliveryFee: order.delivery_fee,
+      distanceKm: order.distance_km,
+      etaMinutes: order.eta_minutes,
+      pickupAddress: order.pickup_address,
+      dropoffAddress: order.dropoff_address,
+      createdAt: order.created_at,
+      shopName: shop?.shop_name ?? "Laundry Shop",
+      shopLocation: shop?.location ?? "",
+      serviceName: service?.name ?? "Wash",
+    },
+    delivery: {
+      status: delivery?.status ?? null,
+      etaMinutes: delivery?.eta_minutes ?? null,
+      assignedAt: delivery?.assigned_at ?? null,
+      riderName,
+      riderPhone,
+    },
+    riderLocation: riderLocation
+      ? {
+          lat: riderLocation.lat,
+          lng: riderLocation.lng,
+          updatedAt: riderLocation.updated_at,
+        }
+      : null,
+  };
+}

@@ -4,6 +4,19 @@ import { createOrder, updateOrderStatus } from "@/services/orders";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+function isNextRedirectError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  if (!("digest" in error)) {
+    return false;
+  }
+
+  const digest = error.digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+}
+
 function parseSelectedOptionIds(value: FormDataEntryValue | null): string[] {
   if (typeof value !== "string" || !value.trim()) {
     return [];
@@ -83,6 +96,10 @@ export async function createOrderAction(formData: FormData) {
     const pickupDateIso = parseIsoDateOrThrow(formData.get("pickupDate"), "pickupDate");
     const deliveryDateIso = parseIsoDateOrThrow(formData.get("deliveryDate"), "deliveryDate");
     const contactPhone = normalizePhoneNumberOrThrow(formData.get("contactPhone"));
+    const promoCodeValue = formData.get("promoCode");
+    const promoCode = typeof promoCodeValue === "string" && promoCodeValue.trim().length > 0
+      ? promoCodeValue.trim().toUpperCase()
+      : undefined;
 
     if (new Date(deliveryDateIso).getTime() < new Date(pickupDateIso).getTime()) {
       throw new Error("deliveryDate must be after pickupDate");
@@ -103,7 +120,7 @@ export async function createOrderAction(formData: FormData) {
       riderNotes: String(formData.get("riderNotes") || ""),
       pickupAddress: String(formData.get("pickupAddress")),
       dropoffAddress: String(formData.get("dropoffAddress")),
-      promoCode: String(formData.get("promoCode") || ""),
+      promoCode,
       paymentMethod: String(formData.get("paymentMethod") || "cod"),
       pickupLat: Number(formData.get("pickupLat") || 0) || undefined,
       pickupLng: Number(formData.get("pickupLng") || 0) || undefined,
@@ -117,7 +134,22 @@ export async function createOrderAction(formData: FormData) {
     revalidatePath("/customer/requests");
 
     redirect(`/customer/orders/confirmation?orderId=${encodeURIComponent(createdOrder.id)}`);
-  } catch {
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+
+    const errorMessage =
+      error instanceof Error && error.message
+        ? error.message
+        : "Unable to create booking. Please review your details and try again.";
+
+    console.error("[createOrderAction] booking failed", {
+      error: errorMessage,
+      shopId: formData.get("shopId"),
+      serviceId: formData.get("serviceId"),
+    });
+
     const shopId = String(formData.get("shopId") ?? "");
     const serviceId = String(formData.get("serviceId") ?? "");
     const weightEstimate = String(formData.get("weightEstimate") ?? "");
@@ -125,6 +157,7 @@ export async function createOrderAction(formData: FormData) {
     const bucket = String(formData.get("bucket") ?? "");
     const nextSearch = new URLSearchParams();
     nextSearch.set("error", "Unable to create booking. Please review your details and try again.");
+    nextSearch.set("errorDetail", errorMessage.slice(0, 180));
 
     if (shopId) {
       nextSearch.set("shopId", shopId);
@@ -158,4 +191,22 @@ export async function updateOrderStatusAction(formData: FormData) {
 
   revalidatePath("/shop/orders");
   revalidatePath("/customer/orders");
+}
+
+export async function cancelOrderDuringConfirmationAction(orderId: string) {
+  try {
+    await updateOrderStatus({
+      orderId,
+      nextStatus: "cancelled",
+    });
+
+    revalidatePath("/customer/orders");
+    revalidatePath("/customer/requests");
+    return { ok: true as const };
+  } catch {
+    return {
+      ok: false as const,
+      message: "Unable to cancel this request now. You can continue to tracking.",
+    };
+  }
 }

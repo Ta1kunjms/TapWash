@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
 import {
   calculateServiceEstimate,
-  formatServiceRateLabel,
   getDefaultSelectedOptionIds,
   getEstimatedLoadCount,
   getServiceLoadCapacityKg,
@@ -18,8 +17,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
+
+type PaymentMethod = "cod" | "gcash" | "card";
+type VoucherStatus = "idle" | "applied" | "invalid" | "error";
 
 type ShopService = PricingService & {
   service_option_groups?: PricingOptionGroup[];
@@ -107,7 +109,7 @@ export function CheckoutForm({
   const [dropoffAddress, setDropoffAddress] = useState(() => initialDraft?.dropoffAddress ?? initialSelectedAddress?.addressLine ?? "");
   const [pickupDate, setPickupDate] = useState(() => initialDraft?.pickupDate ?? getDefaultPickupDateTime());
   const [deliveryDate, setDeliveryDate] = useState(() => initialDraft?.deliveryDate ?? getDefaultDeliveryDateTime());
-  const [paymentMethod, setPaymentMethod] = useState<"cod" | "gcash" | "card">(() => initialDraft?.paymentMethod ?? "cod");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => initialDraft?.paymentMethod ?? "cod");
   const [promoCode, setPromoCode] = useState(() => initialDraft?.promoCode ?? initialPromoCode ?? "");
   const [contactPhone, setContactPhone] = useState(() => initialDraft?.contactPhone ?? "");
   const [deliveryInstructions, setDeliveryInstructions] = useState(() => initialDraft?.deliveryInstructions ?? "");
@@ -133,8 +135,17 @@ export function CheckoutForm({
   );
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+  const [showAdditionalInstructions, setShowAdditionalInstructions] = useState(false);
+  const [showTipOptions, setShowTipOptions] = useState(false);
   const [promoDiscount, setPromoDiscount] = useState<number>(0);
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(() => {
+    const fromDraft = initialDraft?.promoCode?.trim().toUpperCase();
+    return fromDraft ? fromDraft : null;
+  });
   const [resolvedPromoCode, setResolvedPromoCode] = useState<string | null>(null);
+  const [isApplyingVoucher, setIsApplyingVoucher] = useState(false);
+  const [voucherStatus, setVoucherStatus] = useState<VoucherStatus>("idle");
+  const [voucherMessage, setVoucherMessage] = useState<string | null>(null);
   const selectableAddresses = useMemo(
     () => uniqueAddresses([pickupAddress, dropoffAddress, ...savedAddresses]),
     [dropoffAddress, pickupAddress, savedAddresses],
@@ -193,7 +204,6 @@ export function CheckoutForm({
   const hasQuoteError = Boolean(canRequestQuote && quoteErrorSignature === quoteSignature && !hasRouteQuote);
   const isQuoteLoading = Boolean(canRequestQuote && !hasRouteQuote && !hasQuoteError);
 
-  const basePrice = Number(bucketEstimates.reduce((sum, entry) => sum + entry.estimate.basePrice, 0).toFixed(2));
   const optionsTotal = Number(bucketEstimates.reduce((sum, entry) => sum + entry.estimate.optionsTotal, 0).toFixed(2));
   const subtotal = Number(bucketEstimates.reduce((sum, entry) => sum + entry.estimate.subtotal, 0).toFixed(2));
   const totalLoads = bucketEstimates.reduce((sum, entry) => sum + entry.loads, 0);
@@ -211,53 +221,108 @@ export function CheckoutForm({
       hasRouteQuote,
   );
 
-  useEffect(() => {
+  const estimateVoucher = useCallback(async (code: string) => {
+    const response = await fetch("/api/vouchers/estimate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        code,
+        subtotal,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Voucher estimate failed");
+    }
+
+    const result = (await response.json()) as { promoCode: string | null; discount: number };
+    return {
+      promoCode: result.promoCode,
+      discount: Number((result.discount ?? 0).toFixed(2)),
+    };
+  }, [subtotal]);
+
+  async function handleApplyVoucher() {
     const normalizedPromoCode = promoCode.trim().toUpperCase();
 
     if (!normalizedPromoCode) {
       setPromoDiscount(0);
       setResolvedPromoCode(null);
+      setAppliedPromoCode(null);
+      setVoucherStatus("idle");
+      setVoucherMessage(null);
+      return;
+    }
+
+    setIsApplyingVoucher(true);
+    setVoucherStatus("idle");
+    setVoucherMessage("Applying voucher...");
+
+    try {
+      const result = await estimateVoucher(normalizedPromoCode);
+
+      if (!result.promoCode || result.discount <= 0) {
+        setPromoDiscount(0);
+        setResolvedPromoCode(null);
+        setAppliedPromoCode(null);
+        setVoucherStatus("invalid");
+        setVoucherMessage("Voucher is not eligible for this order.");
+        return;
+      }
+
+      setPromoCode(result.promoCode);
+      setPromoDiscount(result.discount);
+      setResolvedPromoCode(result.promoCode);
+      setAppliedPromoCode(result.promoCode);
+      setVoucherStatus("applied");
+      setVoucherMessage(`${result.promoCode} applied: -${formatCurrency(result.discount)}`);
+    } catch {
+      setPromoDiscount(0);
+      setResolvedPromoCode(null);
+      setAppliedPromoCode(null);
+      setVoucherStatus("error");
+      setVoucherMessage("Could not apply voucher right now. Please try again.");
+    } finally {
+      setIsApplyingVoucher(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!appliedPromoCode) {
       return;
     }
 
     let isActive = true;
-    const timeoutId = setTimeout(async () => {
-      try {
-        const response = await fetch("/api/vouchers/estimate", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            code: normalizedPromoCode,
-            subtotal,
-          }),
-        });
 
-        if (!response.ok) {
-          if (isActive) {
-            setPromoDiscount(0);
-            setResolvedPromoCode(null);
-          }
+    void (async () => {
+      try {
+        const result = await estimateVoucher(appliedPromoCode);
+        if (!isActive) return;
+
+        if (!result.promoCode || result.discount <= 0) {
+          setPromoDiscount(0);
+          setResolvedPromoCode(null);
+          setAppliedPromoCode(null);
+          setVoucherStatus("invalid");
+          setVoucherMessage("Applied voucher is no longer eligible for this total.");
           return;
         }
 
-        const result = (await response.json()) as { promoCode: string | null; discount: number };
-        if (!isActive) return;
-
-        setPromoDiscount(Number((result.discount ?? 0).toFixed(2)));
+        setPromoDiscount(result.discount);
         setResolvedPromoCode(result.promoCode);
+        setVoucherStatus("applied");
+        setVoucherMessage(`${result.promoCode} applied: -${formatCurrency(result.discount)}`);
       } catch {
-        if (isActive) {
-          setPromoDiscount(0);
-          setResolvedPromoCode(null);
-        }
+        if (!isActive) return;
+        setVoucherStatus("error");
+        setVoucherMessage("Could not refresh voucher discount.");
       }
-    }, 300);
+    })();
 
     return () => {
       isActive = false;
-      clearTimeout(timeoutId);
     };
-  }, [promoCode, subtotal]);
+  }, [appliedPromoCode, estimateVoucher]);
 
   useEffect(() => {
     if (!canRequestQuote) return;
@@ -289,6 +354,8 @@ export function CheckoutForm({
                 pickupAddress,
                 dropoffAddress,
                 shopLocation: selectedShop?.location,
+                pickupDate,
+                deliveryDate,
               }),
             });
 
@@ -345,7 +412,7 @@ export function CheckoutForm({
       isActive = false;
       clearTimeout(timeoutId);
     };
-  }, [canRequestQuote, dropoffAddress, pickupAddress, quoteSignature, selectedShop?.location]);
+  }, [canRequestQuote, deliveryDate, dropoffAddress, pickupAddress, pickupDate, quoteSignature, selectedShop?.location]);
 
   useEffect(() => {
     if (!selectedShop?.id || !selectedService?.id || typeof window === "undefined") return;
@@ -435,7 +502,7 @@ export function CheckoutForm({
   }
 
   return (
-    <form action={createOrderAction} className="space-y-4 pb-40">
+    <form action={createOrderAction} className="space-y-3 pb-44">
       <section className="-mx-4 rounded-b-[2rem] bg-[linear-gradient(180deg,#ddecfb_0%,#cce4fa_100%)] px-4 pb-5 pt-3 shadow-[0_12px_28px_rgba(90,140,184,0.18)]">
         <div className="relative flex items-center justify-center">
           <Link
@@ -456,137 +523,212 @@ export function CheckoutForm({
           <OrderStepper currentStep={2} />
         </div>
       </section>
-
-
-      {/* Unified receipt card moved to end of page */}
-
-      <section className="mt-4">
-        <div className="mb-4">
-          <p className="text-[0.72rem] font-black uppercase tracking-[0.18em] text-[#7aaed3]">Delivery details</p>
-          <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Pickup and delivery schedule</h2>
+      <section className="rounded-[1.2rem] border border-[#cfe3f2] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
+        <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Service summary</p>
+        <div className="mt-2 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-[1rem] font-black text-[#2f5878]">{selectedService.name}</h2>
+            <p className="truncate text-[0.8rem] font-semibold text-[#6d90aa]">{selectedShop.shop_name}</p>
+          </div>
+          <span className="shrink-0 rounded-full bg-[#eaf5ff] px-3 py-1 text-[0.72rem] font-black text-[#1f8fd6]">
+            {totalLoads > 0 ? `${totalLoads} load${totalLoads > 1 ? "s" : ""}` : "1 load"}
+          </span>
         </div>
+        {totalWeight > 0 ? <p className="mt-2 text-[0.76rem] font-semibold text-[#6d90aa]">Estimated {totalWeight.toFixed(1)} kg</p> : null}
+      </section>
 
-        <div className="space-y-4">
-          <div className="rounded-[1.1rem] border border-[#b7c6d1] bg-white px-3.5 py-3 shadow-[0_4px_10px_rgba(94,126,150,0.08)]">
-            <button
-              type="button"
-              onClick={() => setAddressMenuOpen((current) => !current)}
-              className="w-full text-left"
-            >
-              <div className="flex items-center gap-3 text-[#1083c7]">
-                <FlaticonIcon name="navigation" className="text-[1.25rem]" />
-                <p className="truncate text-[1.05rem] font-bold leading-tight">{selectedShop.shop_name}</p>
-              </div>
-              <div className="my-2.5 h-px bg-[#c4d2dc]" />
-              <div className="flex items-center gap-3 text-[#1083c7]">
-                <FlaticonIcon name="marker" className="text-[1.25rem]" />
-                <p className="line-clamp-1 text-[0.98rem] font-bold leading-tight">
-                  {dropoffAddress || pickupAddress || "Tap to choose my address"}
-                </p>
-              </div>
-            </button>
+      <section className="rounded-[1.2rem] border border-[#cfe3f2] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
+        <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Schedule</p>
+        <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Pickup and delivery schedule</h2>
 
-            {addressMenuOpen ? (
-              <div className="mt-3 space-y-2 rounded-[0.85rem] border border-[#d7e8f4] bg-[#f7fbff] p-2.5">
-                {selectableAddresses.length > 0 ? (
-                  selectableAddresses.map((address) => (
-                    <button
-                      key={address}
-                      type="button"
-                      onClick={() => {
-                        setPickupAddress(address);
-                        setDropoffAddress(address);
-                        setAddressMenuOpen(false);
-                      }}
-                      className="w-full rounded-[0.7rem] border border-[#d2e6f5] bg-white px-3 py-2 text-left text-[0.78rem] font-semibold text-[#2f5878] transition hover:border-[#9fcae8]"
-                    >
-                      {address}
-                    </button>
-                  ))
-                ) : (
-                  <p className="rounded-[0.7rem] bg-white px-3 py-2 text-[0.78rem] font-semibold text-[#6d90aa]">
-                    No saved addresses yet. Add one in the Location page.
-                  </p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setShowManualAddressFields((current) => !current)}
-                  className="w-full rounded-[0.7rem] border border-[#9fcae8] bg-[#edf7ff] px-3 py-2 text-[0.76rem] font-black text-[#1f8fd6]"
-                >
-                  {showManualAddressFields ? "Hide manual address fields" : "Use different pickup/drop-off address"}
-                </button>
-              </div>
-            ) : null}
+        <div className="mt-3 space-y-3">
+          <div className="rounded-[1rem] border border-[#d8e8f4] bg-[#f9fcff] p-3">
+            <p className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#5d8cb0]">Pickup</p>
+            <DateChipPicker
+              value={extractDatePart(pickupDate)}
+              onChange={(nextDate) => {
+                const fallbackTime = extractTimePart(pickupDate) || "08:00";
+                const nextPickupDate = composeDateTime(nextDate, fallbackTime);
+                setPickupDate(nextPickupDate);
+                setDeliveryDate((currentDelivery) => ensureDeliveryAfterPickup(nextPickupDate, currentDelivery));
+              }}
+            />
+            <TimeSlotPicker
+              dateValue={extractDatePart(pickupDate)}
+              value={extractTimePart(pickupDate)}
+              minimumDateTime={toLocalDateTimeInputValue(new Date())}
+              onChange={(nextTime) => {
+                const fallbackDate = extractDatePart(pickupDate) || getTodayDate();
+                const nextPickupDate = composeDateTime(fallbackDate, nextTime);
+                setPickupDate(nextPickupDate);
+                setDeliveryDate((currentDelivery) => ensureDeliveryAfterPickup(nextPickupDate, currentDelivery));
+              }}
+            />
           </div>
 
-          <DateTimeCard
-            title="Pick-up Date and Time"
-            icon="clock"
-            dateValue={extractDatePart(pickupDate)}
-            timeValue={extractTimePart(pickupDate)}
-            onDateChange={(nextDate) => {
-              const fallbackTime = extractTimePart(pickupDate) || "08:00";
-              const nextPickupDate = composeDateTime(nextDate, fallbackTime);
-              setPickupDate(nextPickupDate);
-              setDeliveryDate((currentDelivery) => ensureDeliveryAfterPickup(nextPickupDate, currentDelivery));
-            }}
-            onTimeChange={(nextTime) => {
-              const fallbackDate = extractDatePart(pickupDate) || getTodayDate();
-              const nextPickupDate = composeDateTime(fallbackDate, nextTime);
-              setPickupDate(nextPickupDate);
-              setDeliveryDate((currentDelivery) => ensureDeliveryAfterPickup(nextPickupDate, currentDelivery));
-            }}
-          />
+          <div className="rounded-[1rem] border border-[#d8e8f4] bg-[#f9fcff] p-3">
+            <p className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#5d8cb0]">Delivery</p>
+            <DateChipPicker
+              value={extractDatePart(deliveryDate)}
+              onChange={(nextDate) => {
+                const fallbackTime = extractTimePart(deliveryDate) || "09:00";
+                setDeliveryDate(ensureDeliveryAfterPickup(pickupDate, composeDateTime(nextDate, fallbackTime)));
+              }}
+            />
+            <TimeSlotPicker
+              dateValue={extractDatePart(deliveryDate)}
+              value={extractTimePart(deliveryDate)}
+              minimumDateTime={pickupDate}
+              onChange={(nextTime) => {
+                const fallbackDate = extractDatePart(deliveryDate) || getTodayDate();
+                setDeliveryDate(ensureDeliveryAfterPickup(pickupDate, composeDateTime(fallbackDate, nextTime)));
+              }}
+            />
+          </div>
+        </div>
+      </section>
 
-          <DateTimeCard
-            title="Delivery Date and Time"
-            icon="home-location-alt"
-            dateValue={extractDatePart(deliveryDate)}
-            timeValue={extractTimePart(deliveryDate)}
-            onDateChange={(nextDate) => {
-              const fallbackTime = extractTimePart(deliveryDate) || "09:00";
-              setDeliveryDate(composeDateTime(nextDate, fallbackTime));
-            }}
-            onTimeChange={(nextTime) => {
-              const fallbackDate = extractDatePart(deliveryDate) || getTodayDate();
-              setDeliveryDate(composeDateTime(fallbackDate, nextTime));
-            }}
-          />
+      <section className="rounded-[1.2rem] border border-[#cfe3f2] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Location</p>
+            <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Location details</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAddressMenuOpen((current) => !current)}
+            className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.74rem] font-black text-[#2f8ecf]"
+          >
+            {addressMenuOpen ? "Hide" : "Change"}
+          </button>
         </div>
 
-        <div className="space-y-4">
-          {showManualAddressFields ? (
-            <>
-              <AddressAutocomplete
-                label="Pickup Address"
-                name="pickupAddress"
-                placeholder="House no., street, barangay"
-                value={pickupAddress}
-                onValueChange={setPickupAddress}
-                onCoordinateSelect={(coordinates) => {
-                  setPickupLat(coordinates?.lat ?? null);
-                  setPickupLng(coordinates?.lng ?? null);
-                }}
-              />
+        <div className="space-y-2">
+          <div className="rounded-[0.9rem] border border-[#d8e8f4] bg-[#f9fcff] px-3 py-2.5">
+            <p className="text-[0.68rem] font-black uppercase tracking-[0.1em] text-[#6d90aa]">Pickup address</p>
+            <p className="mt-1 text-sm font-semibold text-[#2f5878]">{pickupAddress || "No pickup address selected yet"}</p>
+          </div>
 
-              <AddressAutocomplete
-                label="Drop-off Address"
-                name="dropoffAddress"
-                placeholder="Delivery return address"
-                value={dropoffAddress}
-                onValueChange={setDropoffAddress}
-                onCoordinateSelect={(coordinates) => {
-                  setDropoffLat(coordinates?.lat ?? null);
-                  setDropoffLng(coordinates?.lng ?? null);
-                }}
-              />
-            </>
+          <div className="rounded-[0.9rem] border border-[#d8e8f4] bg-[#f9fcff] px-3 py-2.5">
+            <p className="text-[0.68rem] font-black uppercase tracking-[0.1em] text-[#6d90aa]">Delivery address</p>
+            <p className="mt-1 text-sm font-semibold text-[#2f5878]">
+              {dropoffAddress || "No delivery address selected yet"}
+              {dropoffAddress && pickupAddress && dropoffAddress === pickupAddress ? " (same as pickup)" : ""}
+            </p>
+          </div>
+        </div>
+
+        {addressMenuOpen ? (
+          <div className="mt-3 space-y-2 rounded-[0.85rem] border border-[#d7e8f4] bg-[#f7fbff] p-2.5">
+            {selectableAddresses.length > 0 ? (
+              selectableAddresses.map((address) => (
+                <button
+                  key={address}
+                  type="button"
+                  onClick={() => {
+                    setPickupAddress(address);
+                    setDropoffAddress(address);
+                    setAddressMenuOpen(false);
+                  }}
+                  className="w-full rounded-[0.7rem] border border-[#d2e6f5] bg-white px-3 py-2 text-left text-[0.78rem] font-semibold text-[#2f5878] transition hover:border-[#9fcae8]"
+                >
+                  {address}
+                </button>
+              ))
+            ) : (
+              <p className="rounded-[0.7rem] bg-white px-3 py-2 text-[0.78rem] font-semibold text-[#6d90aa]">
+                No saved addresses yet. Add one in the Location page.
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowManualAddressFields((current) => !current)}
+              className="w-full rounded-[0.7rem] border border-[#9fcae8] bg-[#edf7ff] px-3 py-2 text-[0.76rem] font-black text-[#1f8fd6]"
+            >
+              {showManualAddressFields ? "Hide manual address fields" : "Use different pickup/drop-off address"}
+            </button>
+          </div>
+        ) : null}
+
+        {showManualAddressFields ? (
+          <div className="mt-3 grid gap-3">
+            <AddressAutocomplete
+              label="Pickup Address"
+              name="pickupAddress"
+              placeholder="House no., street, barangay"
+              value={pickupAddress}
+              onValueChange={setPickupAddress}
+              onCoordinateSelect={(coordinates) => {
+                setPickupLat(coordinates?.lat ?? null);
+                setPickupLng(coordinates?.lng ?? null);
+              }}
+            />
+
+            <AddressAutocomplete
+              label="Drop-off Address"
+              name="dropoffAddress"
+              placeholder="Delivery return address"
+              value={dropoffAddress}
+              onValueChange={setDropoffAddress}
+              onCoordinateSelect={(coordinates) => {
+                setDropoffLat(coordinates?.lat ?? null);
+                setDropoffLng(coordinates?.lng ?? null);
+              }}
+            />
+          </div>
+        ) : null}
+
+        <label className="mt-3 block text-xs font-semibold text-text-secondary">
+          Contact number
+          <Input
+            value={contactPhone}
+            onChange={(event) => setContactPhone(sanitizePhoneInput(event.target.value))}
+            placeholder="09XXXXXXXXX"
+            inputMode="tel"
+            className="mt-2 h-11 rounded-[0.9rem] border-[#d8e5ef] bg-[#f8fcff]"
+          />
+          {contactPhone && !normalizedContactPhone ? (
+            <span className="mt-1 block text-[0.74rem] text-[#d34f4f]">Enter a valid PH mobile number.</span>
           ) : null}
+        </label>
 
+        <div className="mt-3 rounded-[1rem] border border-[#d8e8f4] bg-[linear-gradient(180deg,#f8fcff_0%,#eef7ff_100%)] p-3.5">
+          <p className="text-sm font-black text-[#2f5878]">Delivery Fee</p>
+          <p className="mt-1 text-xs text-[#6d90aa]">Based on distance and estimated travel time.</p>
+          <div className="mt-3 grid gap-2 text-[0.84rem] sm:grid-cols-3">
+            <span className="rounded-[0.8rem] bg-white px-3 py-2 font-semibold text-[#2f5878]">
+              Distance: {distanceKm !== null ? `${distanceKm.toFixed(1)} km` : "Pending"}
+            </span>
+            <span className="rounded-[0.8rem] bg-white px-3 py-2 font-semibold text-[#2f5878]">
+              Est. travel: {etaMin !== null && etaMax !== null ? `${etaMin}-${etaMax} min` : "Pending"}
+            </span>
+            <span className="rounded-[0.8rem] bg-white px-3 py-2 font-semibold text-[#2f5878]">Fee: {formatCurrency(deliveryFee)}</span>
+          </div>
+          {isQuoteLoading ? <p className="mt-2 text-xs text-[#7c9fb9]">Updating delivery fee estimate...</p> : null}
+          {hasQuoteError ? <p className="mt-2 text-xs text-red-500">Unable to calculate delivery fee. Please refine your addresses.</p> : null}
+        </div>
+      </section>
 
+      <section className="rounded-[1.2rem] border border-[#cfe3f2] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Instructions</p>
+            <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Additional Instructions</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAdditionalInstructions((current) => !current)}
+            className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.74rem] font-black text-[#2f8ecf]"
+            aria-expanded={showAdditionalInstructions}
+            aria-controls="additional-instructions-panel"
+          >
+            {showAdditionalInstructions ? "Hide" : "Add"}
+          </button>
+        </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+        {showAdditionalInstructions ? (
+          <div id="additional-instructions-panel" className="grid gap-3 sm:grid-cols-2">
             <label className="block text-xs font-semibold text-text-secondary">
               Delivery instructions
               <textarea
@@ -599,7 +741,7 @@ export function CheckoutForm({
             </label>
 
             <label className="block text-xs font-semibold text-text-secondary">
-              Rider notes
+              Additional instructions for rider
               <textarea
                 name="riderNotes"
                 value={riderNotes}
@@ -609,79 +751,99 @@ export function CheckoutForm({
               />
             </label>
           </div>
+        ) : (
+          <p className="text-[0.82rem] font-semibold text-[#6d90aa]">Add notes for delivery handling, access details, or rider reminders.</p>
+        )}
+      </section>
 
-          <div className="rounded-[1.2rem] border border-[#d8e8f4] bg-[linear-gradient(180deg,#f8fcff_0%,#eef7ff_100%)] p-4">
-            <p className="text-sm font-black text-[#2f5878]">Route quote</p>
-            <p className="mt-1 text-xs text-[#6d90aa]">Estimated from your pickup and drop-off addresses.</p>
+      <section className="rounded-[1.2rem] border border-[#c7d9e8] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[0.98rem] font-black text-[#2f5878]">Price breakdown</h2>
+          <span className="text-[0.78rem] font-bold text-[#7a98ae]">#{selectedShop.id.slice(0, 6).toUpperCase()}</span>
+        </div>
+        <p className="mt-1 text-[0.78rem] font-semibold text-[#6d90aa]">
+          {bucketEstimates.length > 0
+            ? `${totalLoads} x ${bucketEstimates[0]?.service.name}${bucketEstimates.length > 1 ? ` +${bucketEstimates.length - 1} more` : ""}`
+            : "No selected services"}
+        </p>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-              <span className="rounded-full bg-white px-3 py-1.5 font-bold text-[#1f8fd6]">{distanceKm !== null ? `${distanceKm.toFixed(1)} km` : "Distance pending"}</span>
-              <span className="rounded-full bg-white px-3 py-1.5 font-bold text-[#1f8fd6]">
-                {etaMin !== null && etaMax !== null ? `${etaMin}-${etaMax} mins` : "ETA pending"}
-              </span>
-              <span className="rounded-full bg-white px-3 py-1.5 font-bold text-[#1f8fd6]">Delivery fee {formatCurrency(deliveryFee)}</span>
-            </div>
-
-            {isQuoteLoading ? <p className="mt-3 text-xs text-[#7c9fb9]">Finalizing route quote...</p> : null}
-            {hasQuoteError ? <p className="mt-3 text-xs text-red-500">Unable to calculate quote. Please refine your addresses.</p> : null}
-          </div>
+        <div className="mt-3 space-y-1.5 border-t border-[#dbe7f1] pt-2.5 text-[0.84rem]">
+          <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
+          {optionsTotal > 0 ? <SummaryRow label="Service Fee" value={formatCurrency(optionsTotal)} /> : null}
+          <SummaryRow label="Delivery Fee" value={formatCurrency(deliveryFee)} />
+          <SummaryRow label="Tip" value={formatCurrency(tipAmount)} />
+          {promoDiscount > 0 ? <SummaryRow label="Discount" value={`-${formatCurrency(promoDiscount)}`} /> : null}
+          <div className="h-px bg-[#dbe7f1]" />
+          <SummaryRow label="Total" value={formatCurrency(total)} strong />
         </div>
       </section>
 
-      <section className="rounded-[1.35rem] border border-[#d5e3ee] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
-        <div className="mb-4">
-          <p className="text-[0.72rem] font-black uppercase tracking-[0.18em] text-[#7aaed3]">Tips</p>
-          <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Tip your rider</h2>
-          <p className="mt-1 text-[0.78rem] font-semibold text-[#7a97ad]">
-            100% of the tips go to your rider, we don&apos;t deduct anything from it.
+      <section className="rounded-[1.2rem] border border-[#d5e3ee] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
+        <div className="mb-3">
+          <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Voucher</p>
+          <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Apply voucher</h2>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Input
+            value={promoCode}
+            onChange={(event) => {
+              setPromoCode(event.target.value.toUpperCase());
+              if (!event.target.value.trim()) {
+                setPromoDiscount(0);
+                setResolvedPromoCode(null);
+                setAppliedPromoCode(null);
+                setVoucherStatus("idle");
+                setVoucherMessage(null);
+              }
+            }}
+            placeholder="WELCOME100"
+            className="h-11 rounded-[0.9rem] border-[#cae4f8] bg-[#f9fdff]"
+          />
+          <Button
+            type="button"
+            onClick={() => {
+              void handleApplyVoucher();
+            }}
+            disabled={isApplyingVoucher || promoCode.trim().length === 0}
+            className="h-11 rounded-[0.9rem] bg-[#1f8fd6] px-4 text-sm font-bold text-white hover:bg-[#1785c9]"
+          >
+            {isApplyingVoucher ? "Applying..." : "Apply"}
+          </Button>
+        </div>
+
+        {voucherMessage ? (
+          <p
+            className={cn(
+              "mt-2 text-xs font-semibold",
+              voucherStatus === "applied" && "text-[#1f8fd6]",
+              voucherStatus === "invalid" && "text-[#c7572d]",
+              voucherStatus === "error" && "text-[#d34f4f]",
+            )}
+          >
+            {voucherMessage}
           </p>
-        </div>
+        ) : null}
 
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {[0, 5, 20, 40, 80].map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => {
-                  setTipAmount(option);
-                  setCustomTip("");
-                }}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 text-[0.76rem] font-black transition",
-                  tipAmount === option && customTip === ""
-                    ? "border-[#2f8ecf] bg-[#2f8ecf] text-white"
-                    : "border-[#d8e5ef] bg-[#f6fbff] text-[#4f6d84]",
-                )}
-              >
-                {option === 0 ? "Not now" : formatCurrency(option)}
-              </button>
-            ))}
-          </div>
-
-          <label className="mt-2 block text-xs font-semibold text-text-secondary">
-            Custom tip
-            <Input
-              value={customTip}
-              onChange={(event) => {
-                const nextValue = event.target.value.replace(/[^0-9.]/g, "");
-                setCustomTip(nextValue);
-                setTipAmount(Number(nextValue || 0));
-              }}
-              placeholder="0.00"
-              inputMode="decimal"
-              className="mt-2 h-11 rounded-[0.9rem] border-[#d8e5ef] bg-[#f8fcff]"
-            />
-          </label>
-
-          <label className="inline-flex items-center gap-2 text-[0.78rem] font-semibold text-[#5c7b93]">
-            <input type="checkbox" className="h-4 w-4 rounded border-[#c8dbea] text-[#2f8ecf]" />
-            Save for your next order
-          </label>
-        </div>
+        {promoDiscount > 0 && resolvedPromoCode ? (
+          <button
+            type="button"
+            onClick={() => {
+              setPromoCode("");
+              setPromoDiscount(0);
+              setResolvedPromoCode(null);
+              setAppliedPromoCode(null);
+              setVoucherStatus("idle");
+              setVoucherMessage(null);
+            }}
+            className="mt-2 text-xs font-black text-[#2f8ecf] underline"
+          >
+            Remove applied voucher
+          </button>
+        ) : null}
       </section>
 
-      <section>
+      <section className="rounded-[1.2rem] border border-[#d5e3ee] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-lg font-black text-[#2c4f74]">Payment method</h2>
           <button
@@ -689,89 +851,101 @@ export function CheckoutForm({
             onClick={() => setShowPaymentOptions((current) => !current)}
             className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.74rem] font-black text-[#2f8ecf]"
           >
-            Change
+            {showPaymentOptions ? "Done" : "Change"}
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-[1rem] border border-[#d9e7f2] bg-[#f8fcff] px-3 py-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#1f8fd6] text-[0.62rem] font-black text-white">
-                  {paymentMethod === "gcash" ? "GC" : paymentMethod === "card" ? "CC" : "COD"}
+        <div className="grid gap-2 sm:grid-cols-3">
+          {([
+            { value: "cod", label: "Cash on Delivery", badge: "COD" },
+            { value: "gcash", label: "GCash", badge: "GC" },
+            { value: "card", label: "Card", badge: "CC" },
+          ] as const).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setPaymentMethod(option.value)}
+              className={cn(
+                "rounded-[0.9rem] border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f8ecf]",
+                paymentMethod === option.value
+                  ? "border-[#2f8ecf] bg-[#edf7ff] shadow-[0_4px_14px_rgba(47,142,207,0.2)]"
+                  : "border-[#d8e5ef] bg-[#f9fcff]",
+              )}
+              aria-pressed={paymentMethod === option.value}
+            >
+              <div className="flex items-center gap-2">
+                <span className={cn("inline-flex h-8 w-8 items-center justify-center rounded-full", paymentMethod === option.value ? "bg-[#2f8ecf] text-white" : "bg-white text-[#2f8ecf]")}>
+                  <span className="text-[0.64rem] font-black">{option.badge}</span>
                 </span>
-                <div>
-                  <p className="text-[0.84rem] font-black text-[#2f5878]">{formatPaymentMethodLabel(paymentMethod)}</p>
-                  <p className="text-[0.72rem] font-semibold text-[#7a97ad]">{formatPaymentMethodHint(paymentMethod, normalizedContactPhone)}</p>
-                </div>
+                <span className="text-[0.82rem] font-black text-[#2f5878]">{option.label}</span>
               </div>
-              <p className="text-[0.84rem] font-black text-[#2f5878]">{formatCurrency(total)}</p>
-            </div>
-          </div>
+            </button>
+          ))}
+        </div>
 
-          {showPaymentOptions ? (
-            <div className="flex flex-wrap gap-2 rounded-[0.95rem] border border-[#dbe7f1] bg-[#fbfdff] p-2.5">
-              {([
-                { value: "cod", label: "Cash on Delivery" },
-                { value: "gcash", label: "GCash" },
-                { value: "card", label: "Card" },
-              ] as const).map((option) => (
+        {showPaymentOptions ? (
+          <p className="mt-2 text-[0.75rem] font-semibold text-[#6d90aa]">{formatPaymentMethodHint(paymentMethod, normalizedContactPhone)}</p>
+        ) : null}
+      </section>
+
+      <section className="rounded-[1.2rem] border border-[#d5e3ee] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Tip</p>
+            <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Tip your rider</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowTipOptions((current) => !current)}
+            className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.74rem] font-black text-[#2f8ecf]"
+            aria-expanded={showTipOptions}
+            aria-controls="tip-options-panel"
+          >
+            {showTipOptions ? "Hide" : "Edit"}
+          </button>
+        </div>
+
+        {showTipOptions ? (
+          <div id="tip-options-panel" className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {[0, 5, 20, 40, 80].map((option) => (
                 <button
-                  key={option.value}
+                  key={option}
                   type="button"
                   onClick={() => {
-                    setPaymentMethod(option.value);
-                    setShowPaymentOptions(false);
+                    setTipAmount(option);
+                    setCustomTip("");
                   }}
                   className={cn(
                     "rounded-full border px-3 py-1.5 text-[0.76rem] font-black transition",
-                    paymentMethod === option.value
+                    tipAmount === option && customTip === ""
                       ? "border-[#2f8ecf] bg-[#2f8ecf] text-white"
                       : "border-[#d8e5ef] bg-[#f6fbff] text-[#4f6d84]",
                   )}
                 >
-                  {option.label}
+                  {option === 0 ? "No Tip" : formatCurrency(option)}
                 </button>
               ))}
             </div>
-          ) : null}
 
-          <label className="block text-xs font-semibold text-text-secondary">
-            Voucher code
-            <Input
-              name="promoCode"
-              value={promoCode}
-              onChange={(event) => setPromoCode(event.target.value.toUpperCase())}
-              placeholder="WELCOME100"
-              className="mt-2 h-12 rounded-[1rem] border-[#cae4f8] bg-[#f9fdff]"
-            />
-          </label>
-
-        </div>
-      </section>
-
-      <section id="order-summary" className="rounded-[1.1rem] border border-[#c7d9e8] bg-white px-4 py-3.5 shadow-[0_8px_18px_rgba(92,128,160,0.12)] mt-6">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[0.98rem] font-black text-[#2f5878]">Order summary</h2>
-          <span className="text-[0.78rem] font-bold text-[#7a98ae]">#{selectedShop.id.slice(0, 6).toUpperCase()}</span>
-        </div>
-
-        <div className="mt-2 flex items-start justify-between gap-3">
-          <p className="text-[0.76rem] font-semibold text-[#6d90aa]">
-            {bucketEstimates.length > 0
-              ? `${totalLoads} x ${bucketEstimates[0]?.service.name}${bucketEstimates.length > 1 ? ` +${bucketEstimates.length - 1} more` : ""}`
-              : "No selected services"}
-          </p>
-          <p className="text-[0.78rem] font-bold text-[#6d90aa]">{formatCurrency(subtotal)}</p>
-        </div>
-
-        <div className="mt-3 space-y-1.5 border-t border-[#dbe7f1] pt-2.5 text-[0.82rem]">
-          <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
-          <SummaryRow label="Standard delivery" value={formatCurrency(deliveryFee)} />
-          {optionsTotal > 0 ? <SummaryRow label="Service fee" value={formatCurrency(optionsTotal)} /> : null}
-          <SummaryRow label="Tip" value={formatCurrency(tipAmount)} />
-          {promoDiscount > 0 ? <SummaryRow label="Promo savings" value={`-${formatCurrency(promoDiscount)}`} /> : null}
-        </div>
+            <label className="block text-xs font-semibold text-text-secondary">
+              Custom tip
+              <Input
+                value={customTip}
+                onChange={(event) => {
+                  const nextValue = event.target.value.replace(/[^0-9.]/g, "");
+                  setCustomTip(nextValue);
+                  setTipAmount(Number(nextValue || 0));
+                }}
+                placeholder="0.00"
+                inputMode="decimal"
+                className="mt-2 h-11 rounded-[0.9rem] border-[#d8e5ef] bg-[#f8fcff]"
+              />
+            </label>
+          </div>
+        ) : (
+          <p className="text-[0.82rem] font-semibold text-[#6d90aa]">Current tip: {formatCurrency(tipAmount)}</p>
+        )}
       </section>
 
       {isSummaryOpen ? (
@@ -813,11 +987,11 @@ export function CheckoutForm({
               ) : null}
 
               <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
-              <SummaryRow label="Standard delivery" value={formatCurrency(deliveryFee)} />
-              {optionsTotal > 0 ? <SummaryRow label="Service fee" value={formatCurrency(optionsTotal)} /> : null}
+              <SummaryRow label="Delivery Fee" value={formatCurrency(deliveryFee)} />
+              {optionsTotal > 0 ? <SummaryRow label="Service Fee" value={formatCurrency(optionsTotal)} /> : null}
               <SummaryRow label="Tip" value={formatCurrency(tipAmount)} />
               <SummaryRow label="Fees and tax" value="Included" />
-              {promoDiscount > 0 ? <SummaryRow label="Promo savings" value={`-${formatCurrency(promoDiscount)}`} /> : null}
+              {promoDiscount > 0 ? <SummaryRow label="Discount" value={`-${formatCurrency(promoDiscount)}`} /> : null}
               {distanceKm !== null ? <SummaryRow label="Distance" value={`${distanceKm.toFixed(1)} km`} /> : null}
               {etaMin !== null && etaMax !== null ? <SummaryRow label="ETA" value={`${etaMin}-${etaMax} mins`} /> : null}
               <SummaryRow label="Payment" value={formatPaymentMethodLabel(paymentMethod)} />
@@ -840,7 +1014,10 @@ export function CheckoutForm({
       <input type="hidden" name="shopId" value={selectedShop.id} />
       <input type="hidden" name="serviceId" value={selectedService.id} />
       <input type="hidden" name="contactPhone" value={normalizedContactPhone ?? contactPhone.trim()} />
+      <input type="hidden" name="pickupAddress" value={pickupAddress.trim()} />
+      <input type="hidden" name="dropoffAddress" value={dropoffAddress.trim()} />
       <input type="hidden" name="paymentMethod" value={paymentMethod} />
+      <input type="hidden" name="promoCode" value={resolvedPromoCode ?? ""} />
       <input type="hidden" name="pickupDate" value={pickupDate} />
       <input type="hidden" name="deliveryDate" value={deliveryDate} />
       <input type="hidden" name="weightEstimate" value={totalWeight} />
@@ -914,7 +1091,7 @@ function CheckoutSubmitButton({
           )}
           disabled={disabled || pending}
         >
-          {pending ? "Booking..." : disabled ? "Complete details" : "Book Now"}
+          {pending ? "Booking..." : "Confirm Booking"}
         </Button>
       </div>
     </div>
@@ -964,152 +1141,92 @@ function formatPaymentMethodHint(method: "cod" | "gcash" | "card", normalizedCon
 }
 
 const TIME_SLOTS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
-const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const HIGH_DEMAND_SLOTS = new Set(["11:00", "12:00", "17:00", "18:00"]);
+const LIMITED_SLOTS = new Set(["08:00", "16:00"]);
 
-function DateTimeCard({
-  title,
-  icon,
-  dateValue,
-  timeValue,
-  onDateChange,
-  onTimeChange,
+function DateChipPicker({
+  value,
+  onChange,
 }: {
-  title: string;
-  icon: string;
-  dateValue: string;
-  timeValue: string;
-  onDateChange: (value: string) => void;
-  onTimeChange: (value: string) => void;
+  value: string;
+  onChange: (value: string) => void;
 }) {
   const today = startOfDay(new Date());
-  const maxSelectableDate = addDays(today, 15);
-  const selectedDate = clampDate(parseInputDate(dateValue) ?? today, today, maxSelectableDate);
-  const [monthOffset, setMonthOffset] = useState(0);
-  const displayMonthDate = new Date(
-    selectedDate.getFullYear(),
-    selectedDate.getMonth() + monthOffset,
-    1,
-  );
-  const minMonthIndex = today.getFullYear() * 12 + today.getMonth();
-  const maxMonthIndex = maxSelectableDate.getFullYear() * 12 + maxSelectableDate.getMonth();
-  const displayMonthIndex = displayMonthDate.getFullYear() * 12 + displayMonthDate.getMonth();
-  const canGoPrevMonth = displayMonthIndex > minMonthIndex;
-  const canGoNextMonth = displayMonthIndex < maxMonthIndex;
-
-  const days = buildCalendarGrid(displayMonthDate, selectedDate, today, maxSelectableDate);
+  const chips = Array.from({ length: 16 }, (_, index) => {
+    const date = addDays(today, index);
+    return {
+      key: toInputDate(date),
+      dayLabel: date.toLocaleDateString("en-US", { weekday: "short" }),
+      dateLabel: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    };
+  });
 
   return (
-    <div className="rounded-[1.2rem] border border-[#c8def0] bg-[linear-gradient(180deg,#fafdff_0%,#eef7ff_100%)] p-3.5 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
-      <div className="mb-3 flex items-center gap-2 text-[#1f8fd6]">
-        <FlaticonIcon name={icon} className="text-base" />
-        <p className="text-[1rem] font-black">{title}</p>
-      </div>
+    <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      {chips.map((chip) => {
+        const isActive = chip.key === value;
 
-      <div className="mb-3 rounded-[0.95rem] border border-[#d2e6f5] bg-white p-2.5">
-        <div className="mb-2 flex items-center justify-between">
+        return (
           <button
+            key={chip.key}
+            type="button"
+            onClick={() => onChange(chip.key)}
+            className={cn(
+              "shrink-0 rounded-[0.75rem] border px-2.5 py-2 text-left transition",
+              isActive
+                ? "border-[#2f8ecf] bg-[#2f8ecf] text-white"
+                : "border-[#c8def0] bg-white text-[#2f5878] hover:border-[#94c4e4]",
+            )}
+          >
+            <p className="text-[0.66rem] font-black uppercase tracking-[0.08em]">{chip.dayLabel}</p>
+            <p className="text-[0.75rem] font-bold">{chip.dateLabel}</p>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TimeSlotPicker({
+  dateValue,
+  value,
+  minimumDateTime,
+  onChange,
+}: {
+  dateValue: string;
+  value: string;
+  minimumDateTime: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      {TIME_SLOTS.map((slot) => {
+        const isActive = slot === value;
+        const isDisabled = isSlotUnavailable(dateValue, slot, minimumDateTime);
+        const demandLabel = getDemandLabel(slot);
+
+        return (
+          <button
+            key={slot}
             type="button"
             onClick={() => {
-              if (!canGoPrevMonth) return;
-              setMonthOffset((current) => current - 1);
+              if (isDisabled) return;
+              onChange(slot);
             }}
-            disabled={!canGoPrevMonth}
+            disabled={isDisabled}
             className={cn(
-              "inline-flex h-7 w-7 items-center justify-center rounded-full transition",
-              canGoPrevMonth
-                ? "bg-[#edf7ff] text-[#2f8ecf] hover:bg-[#dff0ff]"
-                : "cursor-not-allowed bg-[#f4f9fd] text-[#b8ccdc]",
+              "shrink-0 rounded-[0.85rem] border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f8ecf]",
+              isDisabled && "cursor-not-allowed border-[#dce8f2] bg-[#f4f8fc] text-[#9eb4c4]",
+              !isDisabled && isActive && "border-[#218ed2] bg-[#218ed2] text-white",
+              !isDisabled && !isActive && "border-[#a9d2ef] bg-white text-[#2f8ecf] hover:border-[#8bc2e7]",
             )}
-            aria-label="Previous month"
           >
-            <FlaticonIcon name="angle-small-left" className="text-sm" />
+            <p className="text-[0.76rem] font-black">{formatSlotTime(slot)}</p>
+            {!isDisabled && demandLabel ? <p className="text-[0.64rem] font-semibold opacity-90">{demandLabel}</p> : null}
+            {isDisabled ? <p className="text-[0.64rem] font-semibold">Unavailable</p> : null}
           </button>
-          <p className="text-[0.76rem] font-black uppercase tracking-[0.12em] text-[#2f8ecf]">
-            {displayMonthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              if (!canGoNextMonth) return;
-              setMonthOffset((current) => current + 1);
-            }}
-            disabled={!canGoNextMonth}
-            className={cn(
-              "inline-flex h-7 w-7 items-center justify-center rounded-full transition",
-              canGoNextMonth
-                ? "bg-[#edf7ff] text-[#2f8ecf] hover:bg-[#dff0ff]"
-                : "cursor-not-allowed bg-[#f4f9fd] text-[#b8ccdc]",
-            )}
-            aria-label="Next month"
-          >
-            <FlaticonIcon name="angle-small-right" className="text-sm" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-7 overflow-hidden rounded-[0.75rem] border border-[#d8e8f4]">
-          {WEEKDAY_LABELS.map((label) => (
-            <div
-              key={label}
-              className={cn(
-                "py-1.5 text-center text-[0.68rem] font-black",
-                label === "Sat" || label === "Sun"
-                  ? "bg-[#178fd4] text-white"
-                  : "bg-[#e9f5ff] text-[#2f5878]",
-              )}
-            >
-              {label}
-            </div>
-          ))}
-
-          {days.map((day) => (
-            <button
-              key={day.key}
-              type="button"
-              onClick={() => {
-                if (day.isDisabled) return;
-                onDateChange(toInputDate(day.date));
-                setMonthOffset(0);
-              }}
-              disabled={day.isDisabled}
-              className={cn(
-                "h-9 border-t border-[#e6f1fa] text-[0.78rem] font-black transition",
-                !day.inCurrentMonth && "bg-[#f7fbff] text-[#c0d5e6]",
-                day.inCurrentMonth && !day.isDisabled && "bg-white text-[#2f8ecf] hover:bg-[#edf7ff]",
-                day.isDisabled && "cursor-not-allowed bg-[#f5f9fd] text-[#c8d6e2]",
-                day.isToday && "ring-1 ring-inset ring-[#90c6e8]",
-                day.isSelected && "bg-[#178fd4] text-white",
-              )}
-            >
-              {day.date.getDate()}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <label className="block text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#7aaed3]">Time</label>
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          {TIME_SLOTS.map((slot) => {
-            const isActive = slot === timeValue;
-
-            return (
-              <button
-                key={slot}
-                type="button"
-                onClick={() => onTimeChange(slot)}
-                className={cn(
-                  "shrink-0 rounded-full border px-4 py-1.5 text-[0.95rem] font-black transition",
-                  isActive
-                    ? "border-[#218ed2] bg-[#218ed2] text-white"
-                    : "border-[#a9d2ef] bg-white text-[#2f8ecf] hover:border-[#8bc2e7]",
-                )}
-              >
-                {formatSlotTime(slot)}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+        );
+      })}
     </div>
   );
 }
@@ -1153,62 +1270,38 @@ function addDays(date: Date, days: number) {
   return startOfDay(new Date(date.getFullYear(), date.getMonth(), date.getDate() + days));
 }
 
-function clampDate(value: Date, minDate: Date, maxDate: Date) {
-  if (value.getTime() < minDate.getTime()) {
-    return minDate;
-  }
-
-  if (value.getTime() > maxDate.getTime()) {
-    return maxDate;
-  }
-
-  return value;
-}
-
-function parseInputDate(value: string) {
-  if (!value) return null;
-
-  const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return null;
-
-  return startOfDay(parsed);
-}
-
 function toInputDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+function isSlotUnavailable(dateValue: string, slot: string, minimumDateTime: string) {
+  const selectedTime = Date.parse(composeDateTime(dateValue, slot));
+  const minTime = Date.parse(minimumDateTime);
+
+  if (Number.isNaN(selectedTime)) {
+    return true;
+  }
+
+  if (Number.isNaN(minTime)) {
+    return false;
+  }
+
+  return selectedTime < minTime;
 }
 
-function buildCalendarGrid(monthDate: Date, selectedDate: Date, today: Date, maxDate: Date) {
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
-  const firstOfMonth = new Date(year, month, 1);
-  const firstDayMondayIndex = (firstOfMonth.getDay() + 6) % 7;
-  const gridStart = new Date(year, month, 1 - firstDayMondayIndex);
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cellCount = firstDayMondayIndex + daysInMonth <= 35 ? 35 : 42;
+function getDemandLabel(slot: string) {
+  if (HIGH_DEMAND_SLOTS.has(slot)) {
+    return "High demand";
+  }
 
-  return Array.from({ length: cellCount }, (_, index) => {
-    const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
-    const normalizedDate = startOfDay(date);
-    const isOutsideRange = normalizedDate.getTime() < today.getTime() || normalizedDate.getTime() > maxDate.getTime();
+  if (LIMITED_SLOTS.has(slot)) {
+    return "Limited";
+  }
 
-    return {
-      key: `${normalizedDate.getFullYear()}-${normalizedDate.getMonth()}-${normalizedDate.getDate()}`,
-      date: normalizedDate,
-      inCurrentMonth: normalizedDate.getMonth() === month,
-      isDisabled: isOutsideRange,
-      isToday: isSameDay(normalizedDate, today),
-      isSelected: isSameDay(normalizedDate, selectedDate),
-    };
-  });
+  return null;
 }
 
 function extractDatePart(value: string) {
