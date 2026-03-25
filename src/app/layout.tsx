@@ -19,6 +19,23 @@ export const metadata: Metadata = {
   title: "TapWash",
   description: "Laundry marketplace platform for customers and laundry shops",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/tapwash-logo.png",
+  },
+  openGraph: {
+    title: "TapWash",
+    description: "Laundry marketplace platform for customers and laundry shops",
+    images: [
+      {
+        url: "/tapwash-logo.png",
+        width: 512,
+        height: 512,
+        alt: "TapWash Logo",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({
@@ -30,6 +47,12 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" />
+        {/* Favicon and TapWash logo for browser tab and search */}
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="apple-touch-icon" href="/tapwash-logo.png" />
+        <meta property="og:image" content="/tapwash-logo.png" />
+        <meta property="og:title" content="TapWash" />
+        <meta property="og:description" content="Laundry marketplace platform for customers and laundry shops" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

@@ -275,12 +275,20 @@ export default async function CustomerHomePage({
                 className="group min-w-[88%] snap-start overflow-hidden rounded-[1.85rem] border border-border-muted/70 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.1)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.14)]"
               >
                 <div className="relative aspect-[16/7] overflow-hidden bg-background-app">
+                  {/* Robust image fallback: show logo if cover_image_url is missing, empty, or fails to load */}
                   <Image
-                    src={shop.cover_image_url?.trim() || "/tapwash-logo.png"}
-                    alt={`${shop.shop_name} laundromat cover image`}
+                    src={
+                      shop.cover_image_url && shop.cover_image_url.trim() && shop.cover_image_url.trim() !== ''
+                        ? shop.cover_image_url.trim()
+                        : "/tapwash-logo.png"
+                    }
+                    alt={shop.cover_image_url && shop.cover_image_url.trim() && shop.cover_image_url.trim() !== ''
+                      ? `${shop.shop_name} laundromat cover image`
+                      : "TapWash default laundromat cover image"}
                     fill
                     sizes="(max-width: 768px) 88vw, 360px"
                     className="object-cover transition duration-500 ease-out group-hover:scale-[1.04]"
+                    priority={true}
                   />
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.02)_0%,rgba(15,23,42,0.12)_65%,rgba(15,23,42,0.28)_100%)]" />
 
