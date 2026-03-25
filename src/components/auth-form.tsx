@@ -60,6 +60,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           setLoading(false);
           return;
         }
+        const fullName = `${firstName.trim()} ${surname.trim()}`.trim();
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -67,6 +68,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             data: {
               first_name: firstName.trim(),
               surname: surname.trim(),
+              full_name: fullName,
               username: username.trim(),
               phone: phone.trim(),
               role,
