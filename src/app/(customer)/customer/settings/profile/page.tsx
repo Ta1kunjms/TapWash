@@ -1,6 +1,7 @@
 import { SubPageHeader } from "@/components/customer/mobile-chrome";
+import { ProfileAvatarPicker } from "@/components/customer/profile-avatar-picker";
 import { createClient } from "@/lib/supabase/server";
-import { getCustomerProfile, getInitials } from "@/services/customer";
+import { getCustomerProfile } from "@/services/customer";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -51,11 +52,10 @@ export default async function CustomerProfilePage({
       <SubPageHeader title="My Profile" />
 
       <section className="text-center">
-        <div className="mx-auto mb-2 flex h-20 w-20 items-center justify-center rounded-full border-2 border-primary-500 bg-white text-xl font-bold text-primary-500">
-          {getInitials(profile?.first_name ?? null, profile?.surname ?? null) || "TW"}
-        </div>
+        <ProfileAvatarPicker initialAvatarKey={profile?.avatar_key} name={fullName} />
+        <p className="mb-2 text-xs font-medium text-text-muted">Tap your photo to choose a mascot avatar.</p>
         <h1 className="text-2xl font-bold text-text-secondary">{fullName}</h1>
-        <p className="text-sm text-text-muted">@{(profile?.email ?? "customer").split("@")[0]}</p>
+        <p className="text-sm text-text-muted">@{profile?.username ?? "customer"}</p>
         <p className="text-sm text-text-muted">{profile?.email ?? "customer@tapwash.app"}</p>
       </section>
 
@@ -73,15 +73,18 @@ export default async function CustomerProfilePage({
           />
         </div>
         <input
-          value={(profile?.email ?? "").split("@")[0]}
+          value={profile?.username ?? ""}
           readOnly
           className="h-11 w-full rounded-xl border border-border-muted bg-white px-3 text-sm text-primary-500"
         />
         <input
           name="phone"
-          defaultValue={profile?.phone ?? "+6391****0851"}
+          type="tel"
+          defaultValue={profile?.phone ?? ""}
+          placeholder="09XXXXXXXXX"
           className="h-11 w-full rounded-xl border border-border-muted bg-white px-3 text-sm text-primary-500"
         />
+        <p className="text-xs text-text-muted">Add your phone number here. You can sign up without it, but it is required when placing an order.</p>
         <input
           value={profile?.email ?? "customer@tapwash.app"}
           readOnly

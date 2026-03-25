@@ -287,7 +287,7 @@ export async function getMyOrderTrackingDetails(orderId: string) {
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .select(
-      "id, customer_id, shop_id, service_id, status, pickup_date, delivery_date, total_price, payment_method, payment_reference, promo_code, discount_amount, tip_amount, delivery_fee, distance_km, eta_minutes, dropoff_address, pickup_address, created_at, laundry_shops(shop_name, location), services(name)",
+      "id, customer_id, shop_id, service_id, status, pickup_date, delivery_date, total_price, payment_method, payment_reference, promo_code, discount_amount, tip_amount, delivery_fee, distance_km, eta_minutes, dropoff_address, pickup_address, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, created_at, laundry_shops(shop_name, location), services(name)",
     )
     .eq("id", orderId)
     .eq("customer_id", user.id)
@@ -357,6 +357,10 @@ export async function getMyOrderTrackingDetails(orderId: string) {
       etaMinutes: order.eta_minutes,
       pickupAddress: order.pickup_address,
       dropoffAddress: order.dropoff_address,
+      pickupLat: order.pickup_lat,
+      pickupLng: order.pickup_lng,
+      dropoffLat: order.dropoff_lat,
+      dropoffLng: order.dropoff_lng,
       createdAt: order.created_at,
       shopName: shop?.shop_name ?? "Laundry Shop",
       shopLocation: shop?.location ?? "",

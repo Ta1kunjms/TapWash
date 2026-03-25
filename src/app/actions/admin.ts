@@ -13,7 +13,6 @@ import {
   updateVoucher,
   verifyShop,
 } from "@/services/admin";
-import { notify } from "@/lib/notify";
 
 function toNumber(value: FormDataEntryValue | null, fallback = 0): number {
   const parsed = Number(value);
@@ -27,9 +26,7 @@ export async function verifyShopAction(formData: FormData) {
     await verifyShop(shopId, isVerified);
     revalidatePath("/admin/shops");
     revalidatePath("/customer");
-    notify.success(isVerified ? "Shop verified successfully" : "Shop unverified successfully");
   } catch (error) {
-    notify.error("Failed to update shop verification status");
     console.error("Error verifying shop:", error);
   }
 }
@@ -40,9 +37,7 @@ export async function suspendUserAction(formData: FormData) {
     const isSuspended = String(formData.get("isSuspended")) === "true";
     await setUserSuspended(userId, isSuspended);
     revalidatePath("/admin/users");
-    notify.success(isSuspended ? "User suspended successfully" : "User activated successfully");
   } catch (error) {
-    notify.error("Failed to update user suspension status");
     console.error("Error suspending user:", error);
   }
 }
@@ -56,9 +51,7 @@ export async function updateUserProfileAction(formData: FormData) {
       role: String(formData.get("role")) as "customer" | "shop_owner" | "admin",
     });
     revalidatePath("/admin/users");
-    notify.success("User profile updated successfully");
   } catch (error) {
-    notify.error("Failed to update user profile");
     console.error("Error updating user profile:", error);
   }
 }
@@ -77,9 +70,7 @@ export async function createShopAction(formData: FormData) {
     });
     revalidatePath("/admin/shops");
     revalidatePath("/customer");
-    notify.success("Shop created successfully");
   } catch (error) {
-    notify.error("Failed to create shop");
     console.error("Error creating shop:", error);
   }
 }
@@ -99,9 +90,7 @@ export async function updateShopAction(formData: FormData) {
     });
     revalidatePath("/admin/shops");
     revalidatePath("/customer");
-    notify.success("Shop updated successfully");
   } catch (error) {
-    notify.error("Failed to update shop");
     console.error("Error updating shop:", error);
   }
 }
@@ -111,9 +100,7 @@ export async function deleteShopAction(formData: FormData) {
     await deleteShop(String(formData.get("shopId")));
     revalidatePath("/admin/shops");
     revalidatePath("/customer");
-    notify.success("Shop deleted successfully");
   } catch (error) {
-    notify.error("Failed to delete shop");
     console.error("Error deleting shop:", error);
   }
 }
@@ -129,9 +116,7 @@ export async function createVoucherAction(formData: FormData) {
       maxDiscountAmount: toNumber(formData.get("maxDiscountAmount"), 0) || undefined,
     });
     revalidatePath("/admin/vouchers");
-    notify.success("Voucher created successfully");
   } catch (error) {
-    notify.error("Failed to create voucher");
     console.error("Error creating voucher:", error);
   }
 }
@@ -141,9 +126,7 @@ export async function toggleVoucherAction(formData: FormData) {
     const isActive = String(formData.get("isActive")) === "true";
     await toggleVoucher(String(formData.get("voucherId")), isActive);
     revalidatePath("/admin/vouchers");
-    notify.success(isActive ? "Voucher activated successfully" : "Voucher deactivated successfully");
   } catch (error) {
-    notify.error("Failed to toggle voucher");
     console.error("Error toggling voucher:", error);
   }
 }
@@ -161,9 +144,7 @@ export async function updateVoucherAction(formData: FormData) {
       isActive: String(formData.get("isActive")) === "true",
     });
     revalidatePath("/admin/vouchers");
-    notify.success("Voucher updated successfully");
   } catch (error) {
-    notify.error("Failed to update voucher");
     console.error("Error updating voucher:", error);
   }
 }
@@ -172,9 +153,7 @@ export async function deleteVoucherAction(formData: FormData) {
   try {
     await deleteVoucher(String(formData.get("voucherId")));
     revalidatePath("/admin/vouchers");
-    notify.success("Voucher deleted successfully");
   } catch (error) {
-    notify.error("Failed to delete voucher");
     console.error("Error deleting voucher:", error);
   }
 }

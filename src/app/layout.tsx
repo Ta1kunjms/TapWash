@@ -5,6 +5,8 @@ import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import "./globals.css";
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://tapwash.app";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -16,12 +18,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(appUrl),
   title: "TapWash",
   description: "Laundry marketplace platform for customers and laundry shops",
   manifest: "/manifest.json",
   icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
+    icon: "/tapwash-logo.png",
+    shortcut: "/tapwash-logo.png",
     apple: "/tapwash-logo.png",
   },
   openGraph: {
@@ -48,7 +51,7 @@ export default function RootLayout({
       <head>
         <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" />
         {/* Favicon and TapWash logo for browser tab and search */}
-        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/tapwash-logo.png" type="image/png" />
         <link rel="apple-touch-icon" href="/tapwash-logo.png" />
         <meta property="og:image" content="/tapwash-logo.png" />
         <meta property="og:title" content="TapWash" />

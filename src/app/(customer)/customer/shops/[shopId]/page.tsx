@@ -46,15 +46,17 @@ export default async function CustomerShopDetailPage({
             typeof service?.name === "string" &&
             typeof service?.unit_price === "number",
         )
-        .map((service) => ({
-          ...service,
-          description: service.description ?? null,
-          load_capacity_kg:
-            typeof service.load_capacity_kg === "number" ? service.load_capacity_kg : null,
-          service_option_groups: Array.isArray(service.service_option_groups)
-            ? service.service_option_groups
-            : [],
-        }))
+        .map((service) => {
+          const optionGroups = (service as { service_option_groups?: unknown }).service_option_groups;
+
+          return {
+            ...service,
+            description: service.description ?? null,
+            load_capacity_kg:
+              typeof service.load_capacity_kg === "number" ? service.load_capacity_kg : null,
+            service_option_groups: Array.isArray(optionGroups) ? optionGroups : [],
+          };
+        })
         .sort((a, b) => a.unit_price - b.unit_price)
     : [];
 

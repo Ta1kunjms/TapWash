@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
 import { NotificationBell } from "@/components/customer/notification-bell";
 import { LocationSheetTrigger } from "@/components/customer/location-sheet-trigger";
 import { useState, useRef, useEffect } from "react";
 import type { RecentView } from "@/hooks/use-recent-views";
 import { useRecentViews } from "@/hooks/use-recent-views";
+import {
+  DEFAULT_CUSTOMER_AVATAR_KEY,
+  getCustomerAvatarByKey,
+} from "@/lib/avatar-catalog";
 
 type MobileTopBarProps = {
   searchPlaceholder: string;
@@ -15,6 +20,7 @@ type MobileTopBarProps = {
   searchHiddenFields?: Record<string, string | number | boolean | undefined>;
   locationLabel?: string;
   profileInitials?: string;
+  profileAvatarKey?: string | null;
   notificationCount?: number;
   liveNotificationCount?: boolean;
   recentViews?: RecentView[];
@@ -62,14 +68,21 @@ export function MobileTopBar({
   searchHiddenFields,
   locationLabel = "Choose Location",
   profileInitials = "TW",
+  profileAvatarKey,
   notificationCount = 0,
   liveNotificationCount = true,
 }: MobileTopBarProps) {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const fallbackAvatarSrc = getCustomerAvatarByKey(DEFAULT_CUSTOMER_AVATAR_KEY).src;
+  const [avatarSrc, setAvatarSrc] = useState(getCustomerAvatarByKey(profileAvatarKey).src);
 
   const { recentViews, isLoaded, removeRecentView, clearRecentViews } = useRecentViews();
+
+  useEffect(() => {
+    setAvatarSrc(getCustomerAvatarByKey(profileAvatarKey).src);
+  }, [profileAvatarKey]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -98,10 +111,19 @@ export function MobileTopBar({
           <LocationSheetTrigger locationLabel={locationLabel} />
           <Link
             href="/customer/settings/profile"
-            className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-primary-500/35 bg-white/80 text-xs font-bold text-primary-700"
+            className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-primary-500/35 bg-white/80 text-xs font-bold text-primary-700"
             aria-label="My profile"
           >
-            {profileInitials}
+            <Image
+              src={avatarSrc}
+              alt="Customer profile avatar"
+              width={36}
+              height={36}
+              sizes="36px"
+              className="h-9 w-9 object-cover"
+              onError={() => setAvatarSrc(fallbackAvatarSrc)}
+            />
+            <span className="sr-only">{profileInitials}</span>
           </Link>
         </div>
 

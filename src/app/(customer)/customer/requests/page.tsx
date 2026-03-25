@@ -53,6 +53,7 @@ export default async function CustomerRequestsPage({
         searchAction="/customer/requests"
         locationLabel={locationLabel}
         profileInitials={profileInitials}
+        profileAvatarKey={profile?.avatar_key}
         notificationCount={notificationCount}
       />
 

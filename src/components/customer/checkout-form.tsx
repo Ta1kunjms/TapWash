@@ -2,6 +2,8 @@
 
 import { createOrderAction } from "@/app/actions/orders";
 import { AddressAutocomplete } from "@/components/customer/address-autocomplete";
+import { CheckoutMapPreviewSection } from "@/components/customer/checkout-map-preview-section";
+import { CheckoutPaymentSection } from "@/components/customer/checkout-payment-section";
 import { OrderStepper } from "@/components/customer/order-stepper";
 import { Button } from "@/components/ui/button";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
@@ -22,6 +24,7 @@ import { useFormStatus } from "react-dom";
 
 type PaymentMethod = "cod" | "gcash" | "card";
 type VoucherStatus = "idle" | "applied" | "invalid" | "error";
+type RoutePoint = { lat: number; lng: number };
 
 type ShopService = PricingService & {
   service_option_groups?: PricingOptionGroup[];
@@ -36,7 +39,7 @@ type ShopItem = {
   services: ShopService[];
 };
 
-type CheckoutFormProps = {
+export type CheckoutFormProps = {
   shops: ShopItem[];
   initialShopId?: string;
   initialServiceId?: string;
@@ -49,6 +52,7 @@ type CheckoutFormProps = {
     lng: number;
   } | null;
   initialSavedAddresses?: string[];
+  initialContactPhone?: string;
 };
 
 type CheckoutBucketSelection = {
@@ -78,6 +82,7 @@ export function CheckoutForm({
   initialPromoCode,
   initialSelectedAddress,
   initialSavedAddresses,
+  initialContactPhone,
 }: CheckoutFormProps) {
   const selectedShop = useMemo(
     () => shops.find((shop) => shop.id === initialShopId) ?? shops[0],
@@ -106,12 +111,18 @@ export function CheckoutForm({
   );
 
   const [pickupAddress, setPickupAddress] = useState(() => initialDraft?.pickupAddress ?? initialSelectedAddress?.addressLine ?? "");
+  const [pickupAddressValid, setPickupAddressValid] = useState<boolean>(
+    () => Boolean(initialSelectedAddress?.lat && initialSelectedAddress?.lng)
+  );
   const [dropoffAddress, setDropoffAddress] = useState(() => initialDraft?.dropoffAddress ?? initialSelectedAddress?.addressLine ?? "");
+  const [dropoffAddressValid, setDropoffAddressValid] = useState<boolean>(
+    () => Boolean(initialSelectedAddress?.lat && initialSelectedAddress?.lng)
+  );
   const [pickupDate, setPickupDate] = useState(() => initialDraft?.pickupDate ?? getDefaultPickupDateTime());
   const [deliveryDate, setDeliveryDate] = useState(() => initialDraft?.deliveryDate ?? getDefaultDeliveryDateTime());
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => initialDraft?.paymentMethod ?? "cod");
   const [promoCode, setPromoCode] = useState(() => initialDraft?.promoCode ?? initialPromoCode ?? "");
-  const [contactPhone, setContactPhone] = useState(() => initialDraft?.contactPhone ?? "");
+  const [contactPhone, setContactPhone] = useState(() => initialDraft?.contactPhone ?? initialContactPhone ?? "");
   const [deliveryInstructions, setDeliveryInstructions] = useState(() => initialDraft?.deliveryInstructions ?? "");
   const [riderNotes, setRiderNotes] = useState(() => initialDraft?.riderNotes ?? "");
   const [deliveryFee, setDeliveryFee] = useState<number>(49);
@@ -122,10 +133,17 @@ export function CheckoutForm({
   const [etaMax, setEtaMax] = useState<number | null>(null);
   const [quotedSignature, setQuotedSignature] = useState<string | null>(null);
   const [quoteErrorSignature, setQuoteErrorSignature] = useState<string | null>(null);
+  const [quoteErrorMessage, setQuoteErrorMessage] = useState<string | null>(null);
   const [pickupLat, setPickupLat] = useState<number | null>(initialSelectedAddress?.lat ?? null);
   const [pickupLng, setPickupLng] = useState<number | null>(initialSelectedAddress?.lng ?? null);
   const [dropoffLat, setDropoffLat] = useState<number | null>(initialSelectedAddress?.lat ?? null);
   const [dropoffLng, setDropoffLng] = useState<number | null>(initialSelectedAddress?.lng ?? null);
+  const [shopLat, setShopLat] = useState<number | null>(null);
+  const [shopLng, setShopLng] = useState<number | null>(null);
+  const [, setRoutePath] = useState<RoutePoint[]>([]);
+  const [shopToPickupPath, setShopToPickupPath] = useState<RoutePoint[]>([]);
+  const [shopToPickupDistanceKm, setShopToPickupDistanceKm] = useState<number | null>(null);
+  const [quoteRetryToken, setQuoteRetryToken] = useState(0);
   const [savedAddresses] = useState<string[]>(() =>
     uniqueAddresses([...(initialSavedAddresses ?? []), ...loadSavedAddressesFromStorage()]),
   );
@@ -134,7 +152,6 @@ export function CheckoutForm({
     () => !initialSelectedAddress && (initialSavedAddresses?.length ?? 0) === 0,
   );
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
-  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   const [showAdditionalInstructions, setShowAdditionalInstructions] = useState(false);
   const [showTipOptions, setShowTipOptions] = useState(false);
   const [promoDiscount, setPromoDiscount] = useState<number>(0);
@@ -151,6 +168,13 @@ export function CheckoutForm({
     [dropoffAddress, pickupAddress, savedAddresses],
   );
   const normalizedContactPhone = useMemo(() => normalizePhilippinePhone(contactPhone), [contactPhone]);
+  const customerShopDistanceKm = useMemo(() => {
+    if (pickupLat === null || pickupLng === null || shopLat === null || shopLng === null) {
+      return null;
+    }
+
+    return haversineDistanceKm({ lat: pickupLat, lng: pickupLng }, { lat: shopLat, lng: shopLng });
+  }, [pickupLat, pickupLng, shopLat, shopLng]);
 
   const bucketEstimates = useMemo(
     () =>
@@ -196,8 +220,14 @@ export function CheckoutForm({
   }
   const bookingHref = `/customer/orders/new?${bookingParams.toString()}`;
 
-  const canRequestQuote = Boolean(pickupAddress.trim() && dropoffAddress.trim() && selectedShop?.location);
-  const quoteSignature = `${selectedShop?.location ?? ""}|${pickupAddress.trim()}|${dropoffAddress.trim()}`;
+  const canRequestQuote = Boolean(
+    pickupAddress.trim().length >= 5 &&
+    dropoffAddress.trim().length >= 5 &&
+    pickupAddressValid &&
+    dropoffAddressValid &&
+    selectedShop?.location?.trim().length
+  );
+  const quoteSignature = `${selectedShop?.location ?? ""}|${pickupAddress.trim()}|${dropoffAddress.trim()}|${pickupLat ?? ""},${pickupLng ?? ""}|${dropoffLat ?? ""},${dropoffLng ?? ""}`;
   const hasRouteQuote = Boolean(
     canRequestQuote && quotedSignature === quoteSignature && distanceKm !== null && etaMin !== null && etaMax !== null,
   );
@@ -325,6 +355,18 @@ export function CheckoutForm({
   }, [appliedPromoCode, estimateVoucher]);
 
   useEffect(() => {
+    if (!canRequestQuote) {
+      setQuoteErrorSignature(null);
+      setQuoteErrorMessage(null);
+      setShopLat(null);
+      setShopLng(null);
+      setRoutePath([]);
+      setShopToPickupPath([]);
+      setShopToPickupDistanceKm(null);
+    }
+  }, [canRequestQuote]);
+
+  useEffect(() => {
     if (!canRequestQuote) return;
 
     let isActive = true;
@@ -341,6 +383,10 @@ export function CheckoutForm({
           distanceKm: number;
           pickup: { lat: number; lng: number };
           dropoff: { lat: number; lng: number };
+          shop: { lat: number; lng: number };
+          routePath: RoutePoint[];
+          shopToPickupPath: RoutePoint[];
+          shopToPickupDistanceKm: number | null;
         } | null = null;
 
         while (attempt < maxAttempts && isActive) {
@@ -354,6 +400,10 @@ export function CheckoutForm({
                 pickupAddress,
                 dropoffAddress,
                 shopLocation: selectedShop?.location,
+                pickupLat,
+                pickupLng,
+                dropoffLat,
+                dropoffLng,
                 pickupDate,
                 deliveryDate,
               }),
@@ -367,13 +417,28 @@ export function CheckoutForm({
                 distanceKm: number;
                 pickup: { lat: number; lng: number };
                 dropoff: { lat: number; lng: number };
+                shop: { lat: number; lng: number };
+                routePath: RoutePoint[];
+                shopToPickupPath: RoutePoint[];
+                shopToPickupDistanceKm: number | null;
               };
               break;
             }
 
             // Avoid retrying deterministic client-side errors except rate limits.
             if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+              const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
+              if (isActive) {
+                setQuoteErrorMessage(errorBody?.error ?? "Please verify the selected addresses and try again.");
+              }
               break;
+            }
+
+            if (response.status >= 500 && response.status !== 429) {
+              const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
+              if (isActive) {
+                setQuoteErrorMessage(errorBody?.error ?? "Quote service is temporarily unavailable. Please try again.");
+              }
             }
           } catch {
             // Retry transient network failures below.
@@ -387,6 +452,16 @@ export function CheckoutForm({
         if (!isActive || !result) {
           if (isActive) {
             setQuoteErrorSignature(currentSignature);
+            setQuotedSignature(null);
+            setDistanceKm(null);
+            setEtaMin(null);
+            setEtaMax(null);
+            setShopLat(null);
+            setShopLng(null);
+            setRoutePath([]);
+            setShopToPickupPath([]);
+            setShopToPickupDistanceKm(null);
+            setQuoteErrorMessage((current) => current ?? "Unable to calculate delivery fee. Please refine your addresses.");
           }
           return;
         }
@@ -399,11 +474,29 @@ export function CheckoutForm({
         setPickupLng(result.pickup.lng);
         setDropoffLat(result.dropoff.lat);
         setDropoffLng(result.dropoff.lng);
+        setShopLat(result.shop.lat);
+        setShopLng(result.shop.lng);
+        setRoutePath(Array.isArray(result.routePath) ? result.routePath : []);
+        setShopToPickupPath(Array.isArray(result.shopToPickupPath) ? result.shopToPickupPath : []);
+        setShopToPickupDistanceKm(
+          typeof result.shopToPickupDistanceKm === "number" ? result.shopToPickupDistanceKm : null,
+        );
         setQuotedSignature(currentSignature);
         setQuoteErrorSignature(null);
+        setQuoteErrorMessage(null);
       } catch {
         if (isActive) {
           setQuoteErrorSignature(currentSignature);
+          setQuotedSignature(null);
+          setDistanceKm(null);
+          setEtaMin(null);
+          setEtaMax(null);
+          setShopLat(null);
+          setShopLng(null);
+          setRoutePath([]);
+          setShopToPickupPath([]);
+          setShopToPickupDistanceKm(null);
+          setQuoteErrorMessage("Unable to calculate delivery fee. Please refine your addresses.");
         }
       }
     }, 450);
@@ -412,7 +505,20 @@ export function CheckoutForm({
       isActive = false;
       clearTimeout(timeoutId);
     };
-  }, [canRequestQuote, deliveryDate, dropoffAddress, pickupAddress, pickupDate, quoteSignature, selectedShop?.location]);
+  }, [
+    canRequestQuote,
+    deliveryDate,
+    dropoffAddress,
+    dropoffLat,
+    dropoffLng,
+    pickupAddress,
+    pickupDate,
+    pickupLat,
+    pickupLng,
+    quoteRetryToken,
+    quoteSignature,
+    selectedShop?.location,
+  ]);
 
   useEffect(() => {
     if (!selectedShop?.id || !selectedService?.id || typeof window === "undefined") return;
@@ -477,12 +583,16 @@ export function CheckoutForm({
 
       setPickupAddress(nextAddress);
       setDropoffAddress(nextAddress);
+      setPickupAddressValid(nextAddress.length >= 5);
+      setDropoffAddressValid(nextAddress.length >= 5);
 
       if (typeof custom.detail?.lat === "number" && typeof custom.detail?.lng === "number") {
         setPickupLat(custom.detail.lat);
         setPickupLng(custom.detail.lng);
         setDropoffLat(custom.detail.lat);
         setDropoffLng(custom.detail.lng);
+        setPickupAddressValid(true);
+        setDropoffAddressValid(true);
       }
     };
 
@@ -523,6 +633,17 @@ export function CheckoutForm({
           <OrderStepper currentStep={2} />
         </div>
       </section>
+
+      <CheckoutMapPreviewSection
+        shopName={selectedShop.shop_name}
+        roadDistanceKm={shopToPickupDistanceKm ?? customerShopDistanceKm}
+        pickupLat={pickupLat}
+        pickupLng={pickupLng}
+        shopLat={shopLat}
+        shopLng={shopLng}
+        routePath={shopToPickupPath}
+      />
+
       <section className="rounded-[1.2rem] border border-[#cfe3f2] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
         <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Service summary</p>
         <div className="mt-2 flex items-start justify-between gap-3">
@@ -599,8 +720,21 @@ export function CheckoutForm({
             onClick={() => setAddressMenuOpen((current) => !current)}
             className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.74rem] font-black text-[#2f8ecf]"
           >
-            {addressMenuOpen ? "Hide" : "Change"}
+            {addressMenuOpen ? "Done" : "Change"}
           </button>
+        </div>
+
+        <div className="mb-2 flex items-center gap-2">
+          <span
+            className={cn(
+              "rounded-full px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em]",
+              pickupAddress && dropoffAddress && pickupAddress === dropoffAddress
+                ? "bg-[#eaf5ff] text-[#2f8ecf]"
+                : "bg-[#eef7ef] text-[#2e8a49]",
+            )}
+          >
+            {pickupAddress && dropoffAddress && pickupAddress === dropoffAddress ? "Same pickup and delivery" : "Different pickup and delivery"}
+          </span>
         </div>
 
         <div className="space-y-2">
@@ -628,6 +762,12 @@ export function CheckoutForm({
                   onClick={() => {
                     setPickupAddress(address);
                     setDropoffAddress(address);
+                    setPickupLat(null);
+                    setPickupLng(null);
+                    setDropoffLat(null);
+                    setDropoffLng(null);
+                    setPickupAddressValid(true);
+                    setDropoffAddressValid(true);
                     setAddressMenuOpen(false);
                   }}
                   className="w-full rounded-[0.7rem] border border-[#d2e6f5] bg-white px-3 py-2 text-left text-[0.78rem] font-semibold text-[#2f5878] transition hover:border-[#9fcae8]"
@@ -658,24 +798,42 @@ export function CheckoutForm({
               name="pickupAddress"
               placeholder="House no., street, barangay"
               value={pickupAddress}
-              onValueChange={setPickupAddress}
+              onValueChange={(val) => {
+                setPickupAddress(val);
+                setPickupLat(null);
+                setPickupLng(null);
+                setPickupAddressValid(false);
+              }}
               onCoordinateSelect={(coordinates) => {
                 setPickupLat(coordinates?.lat ?? null);
                 setPickupLng(coordinates?.lng ?? null);
+                setPickupAddressValid(!!coordinates && typeof coordinates.lat === "number" && typeof coordinates.lng === "number");
               }}
             />
+            {!pickupAddressValid && (
+              <span className="text-xs text-red-500">Select a pickup suggestion so we can calculate an accurate route.</span>
+            )}
 
             <AddressAutocomplete
               label="Drop-off Address"
               name="dropoffAddress"
               placeholder="Delivery return address"
               value={dropoffAddress}
-              onValueChange={setDropoffAddress}
+              onValueChange={(val) => {
+                setDropoffAddress(val);
+                setDropoffLat(null);
+                setDropoffLng(null);
+                setDropoffAddressValid(false);
+              }}
               onCoordinateSelect={(coordinates) => {
                 setDropoffLat(coordinates?.lat ?? null);
                 setDropoffLng(coordinates?.lng ?? null);
+                setDropoffAddressValid(!!coordinates && typeof coordinates.lat === "number" && typeof coordinates.lng === "number");
               }}
             />
+            {!dropoffAddressValid && (
+              <span className="text-xs text-red-500">Select a drop-off suggestion so we can calculate an accurate route.</span>
+            )}
           </div>
         ) : null}
 
@@ -706,7 +864,19 @@ export function CheckoutForm({
             <span className="rounded-[0.8rem] bg-white px-3 py-2 font-semibold text-[#2f5878]">Fee: {formatCurrency(deliveryFee)}</span>
           </div>
           {isQuoteLoading ? <p className="mt-2 text-xs text-[#7c9fb9]">Updating delivery fee estimate...</p> : null}
-          {hasQuoteError ? <p className="mt-2 text-xs text-red-500">Unable to calculate delivery fee. Please refine your addresses.</p> : null}
+          {hasQuoteError ? <p className="mt-2 text-xs text-red-500">{quoteErrorMessage ?? "Unable to calculate delivery fee. Please refine your addresses."}</p> : null}
+          {hasQuoteError ? (
+            <button
+              type="button"
+              onClick={() => setQuoteRetryToken((current) => current + 1)}
+              className="mt-2 rounded-full border border-[#9fcae8] bg-white px-3 py-1 text-[0.74rem] font-black text-[#1f8fd6]"
+            >
+              Retry estimate
+            </button>
+          ) : null}
+          {!canRequestQuote && (
+            <p className="mt-2 text-xs text-red-500">Select pickup and drop-off suggestions to calculate delivery fee.</p>
+          )}
         </div>
       </section>
 
@@ -843,50 +1013,13 @@ export function CheckoutForm({
         ) : null}
       </section>
 
-      <section className="rounded-[1.2rem] border border-[#d5e3ee] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-black text-[#2c4f74]">Payment method</h2>
-          <button
-            type="button"
-            onClick={() => setShowPaymentOptions((current) => !current)}
-            className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.74rem] font-black text-[#2f8ecf]"
-          >
-            {showPaymentOptions ? "Done" : "Change"}
-          </button>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-3">
-          {([
-            { value: "cod", label: "Cash on Delivery", badge: "COD" },
-            { value: "gcash", label: "GCash", badge: "GC" },
-            { value: "card", label: "Card", badge: "CC" },
-          ] as const).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setPaymentMethod(option.value)}
-              className={cn(
-                "rounded-[0.9rem] border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f8ecf]",
-                paymentMethod === option.value
-                  ? "border-[#2f8ecf] bg-[#edf7ff] shadow-[0_4px_14px_rgba(47,142,207,0.2)]"
-                  : "border-[#d8e5ef] bg-[#f9fcff]",
-              )}
-              aria-pressed={paymentMethod === option.value}
-            >
-              <div className="flex items-center gap-2">
-                <span className={cn("inline-flex h-8 w-8 items-center justify-center rounded-full", paymentMethod === option.value ? "bg-[#2f8ecf] text-white" : "bg-white text-[#2f8ecf]")}>
-                  <span className="text-[0.64rem] font-black">{option.badge}</span>
-                </span>
-                <span className="text-[0.82rem] font-black text-[#2f5878]">{option.label}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {showPaymentOptions ? (
-          <p className="mt-2 text-[0.75rem] font-semibold text-[#6d90aa]">{formatPaymentMethodHint(paymentMethod, normalizedContactPhone)}</p>
-        ) : null}
-      </section>
+      <CheckoutPaymentSection
+        paymentMethod={paymentMethod}
+        normalizedContactPhone={normalizedContactPhone}
+        onPaymentMethodChange={setPaymentMethod}
+        formatPaymentMethodLabel={formatPaymentMethodLabel}
+        formatPaymentMethodHint={formatPaymentMethodHint}
+      />
 
       <section className="rounded-[1.2rem] border border-[#d5e3ee] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
         <div className="mb-2 flex items-center justify-between gap-3">
@@ -1033,10 +1166,10 @@ export function CheckoutForm({
           })),
         )}
       />
-      <input type="hidden" name="deliveryFee" value={deliveryFee} />
-      <input type="hidden" name="tipAmount" value={tipAmount} />
-      <input type="hidden" name="deliveryInstructions" value={deliveryInstructions} />
-      <input type="hidden" name="riderNotes" value={riderNotes} />
+      <input type="hidden" name="deliveryFee" value={deliveryFee ?? 0} />
+      <input type="hidden" name="tipAmount" value={tipAmount ?? 0} />
+      <input type="hidden" name="deliveryInstructions" value={deliveryInstructions ?? ''} />
+      <input type="hidden" name="riderNotes" value={riderNotes ?? ''} />
       <input type="hidden" name="pickupLat" value={pickupLat ?? ""} />
       <input type="hidden" name="pickupLng" value={pickupLng ?? ""} />
       <input type="hidden" name="dropoffLat" value={dropoffLat ?? ""} />
@@ -1107,12 +1240,28 @@ function SummaryRow({ label, value, strong }: { label: string; value: string; st
   );
 }
 
+function haversineDistanceKm(from: { lat: number; lng: number }, to: { lat: number; lng: number }) {
+  const earthRadiusKm = 6371;
+  const toRad = (value: number) => (value * Math.PI) / 180;
+
+  const deltaLat = toRad(to.lat - from.lat);
+  const deltaLng = toRad(to.lng - from.lng);
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
 function clampWeight(value: number) {
   return Number(Math.min(250, Math.max(0, value)).toFixed(1));
 }
 
-function formatCurrency(value: number) {
-  return `₱${value.toFixed(2)}`;
+function formatCurrency(value: number | null | undefined) {
+  const safeValue = typeof value === "number" && isFinite(value) ? value : 0;
+  return `₱${safeValue.toFixed(2)}`;
 }
 
 function formatPaymentMethodLabel(method: "cod" | "gcash" | "card") {

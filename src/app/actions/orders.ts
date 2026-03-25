@@ -1,6 +1,7 @@
 "use server";
 
 import { createOrder, updateOrderStatus } from "@/services/orders";
+import type { PaymentMethod } from "@/types/domain";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -68,6 +69,18 @@ function parseIsoDateOrThrow(value: FormDataEntryValue | null, fieldName: string
   return parsed.toISOString();
 }
 
+function parseOptionalIsoDate(value: FormDataEntryValue | null, fieldName: string): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== "string" || !value.trim()) return undefined;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid ${fieldName}`);
+  }
+
+  return parsed.toISOString();
+}
+
 function normalizePhoneNumberOrThrow(value: FormDataEntryValue | null): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error("Missing contactPhone");
@@ -90,19 +103,35 @@ function normalizePhoneNumberOrThrow(value: FormDataEntryValue | null): string {
   throw new Error("Invalid contactPhone");
 }
 
+function parsePaymentMethodOrThrow(value: FormDataEntryValue | null): PaymentMethod {
+  if (typeof value !== "string") {
+    throw new Error("Missing paymentMethod");
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "cod" || normalized === "gcash" || normalized === "card") {
+    return normalized;
+  }
+
+  throw new Error("Invalid paymentMethod");
+}
+
 export async function createOrderAction(formData: FormData) {
   try {
     const serviceSelections = parseServiceSelections(formData.get("serviceSelections"));
     const pickupDateIso = parseIsoDateOrThrow(formData.get("pickupDate"), "pickupDate");
-    const deliveryDateIso = parseIsoDateOrThrow(formData.get("deliveryDate"), "deliveryDate");
+    const deliveryDateIso = parseOptionalIsoDate(formData.get("deliveryDate"), "deliveryDate");
     const contactPhone = normalizePhoneNumberOrThrow(formData.get("contactPhone"));
+    const paymentMethod = parsePaymentMethodOrThrow(formData.get("paymentMethod"));
     const promoCodeValue = formData.get("promoCode");
     const promoCode = typeof promoCodeValue === "string" && promoCodeValue.trim().length > 0
       ? promoCodeValue.trim().toUpperCase()
       : undefined;
 
-    if (new Date(deliveryDateIso).getTime() < new Date(pickupDateIso).getTime()) {
-      throw new Error("deliveryDate must be after pickupDate");
+    if (deliveryDateIso) {
+      if (new Date(deliveryDateIso).getTime() < new Date(pickupDateIso).getTime()) {
+        throw new Error("deliveryDate must be after pickupDate");
+      }
     }
 
     const createdOrder = await createOrder({
@@ -121,7 +150,7 @@ export async function createOrderAction(formData: FormData) {
       pickupAddress: String(formData.get("pickupAddress")),
       dropoffAddress: String(formData.get("dropoffAddress")),
       promoCode,
-      paymentMethod: String(formData.get("paymentMethod") || "cod"),
+      paymentMethod,
       pickupLat: Number(formData.get("pickupLat") || 0) || undefined,
       pickupLng: Number(formData.get("pickupLng") || 0) || undefined,
       dropoffLat: Number(formData.get("dropoffLat") || 0) || undefined,

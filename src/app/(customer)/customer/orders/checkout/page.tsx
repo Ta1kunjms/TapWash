@@ -5,6 +5,7 @@ import { listCustomerAddresses, getSelectedCustomerAddress } from "@/services/ad
 import { getCurrentUserRole } from "@/services/auth";
 import { getVerifiedShopsWithServices } from "@/services/shops";
 import { redirect } from "next/navigation";
+import { getCustomerProfile } from "@/services/customer";
 
 type CheckoutBucketSelection = {
   serviceId: string;
@@ -22,15 +23,16 @@ export default async function CheckoutPage({
   if (role !== "customer") redirect(roleToPath(role));
 
   const { q, shopId, serviceId, weight, promoCode, error, errorDetail, bucket } = await searchParams;
-  const [selectedAddress, savedAddresses] = await Promise.all([
+  const [selectedAddress, savedAddresses, profile] = await Promise.all([
     getSelectedCustomerAddress(),
     listCustomerAddresses(),
+    getCustomerProfile(),
   ]);
   let shops: Awaited<ReturnType<typeof getVerifiedShopsWithServices>> = [];
   let loadError: string | null = null;
 
   try {
-    shops = await getVerifiedShopsWithServices(q);
+    shops = await getVerifiedShopsWithServices(q, { shopId, limit: shopId ? 1 : 40 });
   } catch {
     loadError = "Shops are taking too long to load right now. Please try again.";
   }
@@ -70,6 +72,7 @@ export default async function CheckoutPage({
           lng: selectedAddress.lng,
         } : null}
         initialSavedAddresses={savedAddresses.map((address) => address.address_line)}
+        initialContactPhone={profile?.phone || ""}
       />
     </main>
   );

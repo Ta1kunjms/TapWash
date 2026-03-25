@@ -1,10 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
+import {
+  type CustomerAvatarKey,
+  normalizeCustomerAvatarKey,
+} from "@/lib/avatar-catalog";
 
 export type CustomerProfile = {
   id: string;
   email: string;
+  username: string | null;
   first_name: string | null;
   surname: string | null;
+  avatar_key: CustomerAvatarKey;
   phone: string;
   address: string;
   preferred_lat: number | null;
@@ -25,11 +31,13 @@ export async function getCustomerProfile(): Promise<CustomerProfile | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, surname, phone, address, preferred_lat, preferred_lng, notification_last_read_at, location_permission_status, location_permission_updated_at, location_onboarding_last_prompted_at")
+    .select("username, first_name, surname, avatar_key, phone, address, preferred_lat, preferred_lng, notification_last_read_at, location_permission_status, location_permission_updated_at, location_onboarding_last_prompted_at")
     .eq("id", user.id)
     .single<{
+      username: string | null;
       first_name: string | null;
       surname: string | null;
+      avatar_key: string | null;
       phone: string | null;
       address: string | null;
       preferred_lat: number | null;
@@ -43,10 +51,12 @@ export async function getCustomerProfile(): Promise<CustomerProfile | null> {
   return {
     id: user.id,
     email: user.email ?? "",
+    username: profile?.username ?? null,
     first_name: profile?.first_name ?? null,
     surname: profile?.surname ?? null,
+    avatar_key: normalizeCustomerAvatarKey(profile?.avatar_key),
     phone: profile?.phone ?? "",
-    address: profile?.address ?? "Brgy. Tambler, GSC",
+    address: profile?.address ?? "Set Location",
     preferred_lat: profile?.preferred_lat ?? null,
     preferred_lng: profile?.preferred_lng ?? null,
     notification_last_read_at: profile?.notification_last_read_at ?? null,
@@ -54,6 +64,28 @@ export async function getCustomerProfile(): Promise<CustomerProfile | null> {
     location_permission_updated_at: profile?.location_permission_updated_at ?? null,
     location_onboarding_last_prompted_at: profile?.location_onboarding_last_prompted_at ?? null,
   };
+}
+
+export async function updateCustomerAvatar(avatarKey: CustomerAvatarKey): Promise<CustomerAvatarKey> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Please log in to update your avatar.");
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_key: avatarKey })
+    .eq("id", user.id);
+
+  if (error) {
+    throw new Error("We could not save your avatar right now. Please try again.");
+  }
+
+  return avatarKey;
 }
 
 export function getInitials(firstName: string | null, surname: string | null) {

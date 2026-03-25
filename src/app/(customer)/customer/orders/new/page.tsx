@@ -25,7 +25,7 @@ export default async function NewOrderPage({
   let loadError: string | null = null;
 
   try {
-    shops = await getVerifiedShopsWithServices(q);
+    shops = await getVerifiedShopsWithServices(q, { shopId, limit: shopId ? 1 : 40 });
   } catch {
     loadError = "Shops are taking too long to load right now. Please try again.";
   }

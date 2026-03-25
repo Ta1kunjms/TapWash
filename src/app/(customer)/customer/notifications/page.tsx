@@ -102,6 +102,7 @@ export default async function CustomerNotificationsPage({
         searchValue={q}
         locationLabel={locationLabel}
         profileInitials={profileInitials}
+        profileAvatarKey={profile?.avatar_key}
         notificationCount={0}
         liveNotificationCount={false}
       />

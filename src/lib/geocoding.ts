@@ -14,6 +14,20 @@ type NominatimSearchItem = {
   name?: string;
 };
 
+type OrsGeocodeFeature = {
+  geometry?: {
+    coordinates?: [number, number];
+  };
+  properties?: {
+    label?: string;
+    name?: string;
+  };
+};
+
+type OrsGeocodeResponse = {
+  features?: OrsGeocodeFeature[];
+};
+
 type NominatimReverseResponse = {
   lat?: string;
   lon?: string;
@@ -26,7 +40,8 @@ type SuggestAddressOptions = {
   limit?: number;
 };
 
-const NOMINATIM_BASE_URL = process.env.OSM_NOMINATIM_BASE_URL?.trim() || "https://nominatim.openstreetmap.org";
+const ORS_API_KEY = process.env.ORS_API_KEY?.trim();
+const NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org";
 const REQUEST_TIMEOUT_MS = 5000;
 
 function toNumber(value: string | undefined): number | null {
@@ -73,9 +88,73 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   }
 }
 
+async function fetchOrsSuggestions(query: string, options?: SuggestAddressOptions): Promise<AddressSuggestion[]> {
+  if (!ORS_API_KEY) {
+    return [];
+  }
+
+  const trimmed = query.trim();
+  if (trimmed.length < 3) {
+    return [];
+  }
+
+  const countryCodes = normalizeCountryCodes(options?.countryCodes) || "ph";
+  const limit = options?.limit ?? 5;
+  const endpoint =
+    `https://api.openrouteservice.org/geocode/search?` +
+    `api_key=${encodeURIComponent(ORS_API_KEY)}&` +
+    `text=${encodeURIComponent(trimmed)}&` +
+    `boundary.country=${encodeURIComponent(countryCodes)}&` +
+    `size=${encodeURIComponent(String(limit))}`;
+
+  try {
+    const response = await fetchWithTimeout(endpoint);
+    if (!response.ok) return [];
+
+    const body = (await response.json()) as OrsGeocodeResponse;
+    const suggestions = (body.features ?? [])
+      .map((feature) => {
+        const coords = feature.geometry?.coordinates;
+        if (!coords || coords.length < 2) return null;
+
+        const [lng, lat] = coords;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+        const placeName = feature.properties?.label?.trim() || feature.properties?.name?.trim();
+        if (!placeName) return null;
+
+        return {
+          label: feature.properties?.name?.trim() || placeName,
+          placeName,
+          lat,
+          lng,
+        } satisfies AddressSuggestion;
+      })
+      .filter((item): item is AddressSuggestion => Boolean(item));
+
+    if (options?.proximity) {
+      const proximity = options.proximity;
+      suggestions.sort(
+        (a, b) =>
+          haversineDistanceKm(proximity, { lat: a.lat, lng: a.lng }) -
+          haversineDistanceKm(proximity, { lat: b.lat, lng: b.lng }),
+      );
+    }
+
+    return suggestions;
+  } catch {
+    return [];
+  }
+}
+
 export async function suggestAddresses(query: string, options?: SuggestAddressOptions): Promise<AddressSuggestion[]> {
   const trimmed = query.trim();
   if (trimmed.length < 3) return [];
+
+  const orsSuggestions = await fetchOrsSuggestions(trimmed, options);
+  if (orsSuggestions.length > 0) {
+    return orsSuggestions;
+  }
 
   const params = new URLSearchParams({
     q: trimmed,
@@ -131,17 +210,24 @@ export async function suggestAddresses(query: string, options?: SuggestAddressOp
 export async function geocodeAddress(address: string, countryCodes: string[] = ["ph"]): Promise<Coordinates | null> {
   const trimmed = address.trim();
   if (trimmed.length < 3) return null;
-
-  const suggestions = await suggestAddresses(trimmed, {
-    countryCodes,
-    limit: 1,
-  });
-
-  if (suggestions.length === 0) return null;
-  return {
-    lat: suggestions[0].lat,
-    lng: suggestions[0].lng,
-  };
+  if (!ORS_API_KEY) {
+    throw new Error("ORS_API_KEY env variable is not set");
+  }
+  // Compose ORS geocoding API URL
+  const endpoint = `https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(trimmed)}&boundary.country=${countryCodes.join(",")}&size=1`;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const response = await fetch(endpoint, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data.features || !data.features.length) return null;
+    const [lng, lat] = data.features[0].geometry.coordinates;
+    return { lat, lng };
+  } catch {
+    return null;
+  }
 }
 
 export async function reverseGeocode(lat: number, lng: number): Promise<{ address: string; coordinates: Coordinates } | null> {

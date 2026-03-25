@@ -3,12 +3,10 @@
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
 
 import { FavoriteToggleButton } from "@/components/customer/favorite-toggle-button";
-
-import { cn } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRecentViews } from "@/hooks/use-recent-views";
 
 type SortMode =

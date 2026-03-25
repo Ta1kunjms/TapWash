@@ -1,7 +1,14 @@
 import { DeliveryMap } from "@/components/customer/delivery-map";
 import { createClient } from "@/lib/supabase/server";
 
-export async function DeliveryTrackingPanel({ orderId }: { orderId: string }) {
+type OrderTrackingCoordinates = {
+  pickupLat: number | null;
+  pickupLng: number | null;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
+};
+
+export async function DeliveryTrackingPanel({ orderId, coordinates }: { orderId: string; coordinates: OrderTrackingCoordinates }) {
   const supabase = await createClient();
 
   const [{ data: location }, { data: delivery }] = await Promise.all([
@@ -17,5 +24,14 @@ export async function DeliveryTrackingPanel({ orderId }: { orderId: string }) {
       .maybeSingle(),
   ]);
 
-  return <DeliveryMap orderId={orderId} initial={{ location, delivery }} />;
+  return (
+    <DeliveryMap
+      orderId={orderId}
+      pickupLat={coordinates.pickupLat}
+      pickupLng={coordinates.pickupLng}
+      dropoffLat={coordinates.dropoffLat}
+      dropoffLng={coordinates.dropoffLng}
+      initial={{ location, delivery }}
+    />
+  );
 }

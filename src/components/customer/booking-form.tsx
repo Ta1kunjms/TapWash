@@ -61,6 +61,8 @@ export function BookingForm({
   const [serviceLoads, setServiceLoads] = useState<Record<string, number>>(() =>
     buildInitialServiceLoads(services, initialBucket),
   );
+  // User-inputted weight in kg (default to empty string for controlled input)
+  const [userWeight, setUserWeight] = useState<string>("");
   const [selectedOptionIdsByService, setSelectedOptionIdsByService] = useState<Record<string, string[]>>(() =>
     buildInitialSelectedOptionIdsByService(services, initialBucket),
   );
@@ -83,7 +85,8 @@ export function BookingForm({
   const loadCapacityKg = selectedService
     ? getServiceLoadCapacityKg(selectedService, selectedShop?.load_capacity_kg)
     : Number(selectedShop?.load_capacity_kg ?? 8);
-  const weight = estimateWeightFromLoads(selectedLoads, loadCapacityKg);
+  // Use user-inputted weight if provided, else fallback to estimated
+  const weight = userWeight !== "" ? parseFloat(userWeight) : estimateWeightFromLoads(selectedLoads, loadCapacityKg);
   const menuHref = shopId ? `/customer/shops/${encodeURIComponent(shopId)}` : "/customer/shops";
   const quickPicks = [1, 2, 3].map((loads) => ({
     loads,
@@ -92,7 +95,8 @@ export function BookingForm({
     total: selectedService
       ? calculateServiceEstimate({
           service: selectedService,
-          weightKg: estimateWeightFromLoads(loads, loadCapacityKg),
+          // If userWeight is set, use it for all quick picks as well
+          weightKg: userWeight !== "" ? parseFloat(userWeight) : estimateWeightFromLoads(loads, loadCapacityKg),
           shopLoadCapacityKg: selectedShop?.load_capacity_kg,
         }).subtotal
       : 0,
@@ -105,10 +109,13 @@ export function BookingForm({
       const loads = serviceLoads[service.id] ?? 0;
       if (loads <= 0) return null;
 
-      const serviceWeight = estimateWeightFromLoads(
-        loads,
-        getServiceLoadCapacityKg(service, selectedShop?.load_capacity_kg),
-      );
+      // Use userWeight for the active service, else estimate
+      const serviceWeight = (userWeight !== "" && service.id === selectedServiceId)
+        ? parseFloat(userWeight)
+        : estimateWeightFromLoads(
+            loads,
+            getServiceLoadCapacityKg(service, selectedShop?.load_capacity_kg),
+          );
       const serviceEstimate = calculateServiceEstimate({
         service,
         weightKg: serviceWeight,
@@ -137,12 +144,15 @@ export function BookingForm({
   const checkoutServiceId = selectedServiceId || fallbackServiceId;
   const checkoutLoads = checkoutServiceId ? serviceLoads[checkoutServiceId] ?? 0 : 0;
   const checkoutService = services.find((service) => service.id === checkoutServiceId) ?? null;
-  const checkoutWeight = estimateWeightFromLoads(
-    checkoutLoads,
-    checkoutService
-      ? getServiceLoadCapacityKg(checkoutService, selectedShop?.load_capacity_kg)
-      : Number(selectedShop?.load_capacity_kg ?? 8),
-  );
+  // Use userWeight for checkout if set, else estimate
+  const checkoutWeight = userWeight !== ""
+    ? parseFloat(userWeight)
+    : estimateWeightFromLoads(
+        checkoutLoads,
+        checkoutService
+          ? getServiceLoadCapacityKg(checkoutService, selectedShop?.load_capacity_kg)
+          : Number(selectedShop?.load_capacity_kg ?? 8),
+      );
   const canCheckout = bucketSelections.length > 0;
 
   if (shopId) checkoutParams.set("shopId", shopId);
@@ -176,6 +186,24 @@ export function BookingForm({
       </section>
 
       <section className="rounded-[1.6rem] border border-[#c8dbea] bg-white/92 p-4 shadow-[0_10px_24px_rgba(92,128,160,0.15)]">
+        {/* User-inputted weight field */}
+        <div className="mb-4">
+          <label htmlFor="user-weight-input" className="block text-sm font-bold text-[#217ebf] mb-1">
+            Enter laundry weight (kg)
+          </label>
+          <input
+            id="user-weight-input"
+            type="number"
+            min="0"
+            step="0.1"
+            inputMode="decimal"
+            className="w-full rounded-lg border border-[#c7d9e8] px-3 py-2 text-base text-[#217ebf] focus:outline-none focus:ring-2 focus:ring-[#43a9eb]"
+            placeholder="0"
+            value={userWeight}
+            onChange={(e) => setUserWeight(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-[#8bb8d6]">This will be used to estimate your total price and loads.</p>
+        </div>
         <div className="space-y-1">
           {services.map((service, index) => {
 

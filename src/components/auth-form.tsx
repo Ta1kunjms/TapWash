@@ -15,8 +15,8 @@ import brandAsset from "../../Logo/Asset 16@300x.png";
 type Mode = "signin" | "signup" | "forgot-password";
 
 export function AuthForm({ mode }: { mode: Mode }) {
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
@@ -25,7 +25,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [firstName, setFirstName] = useState("");
   const [surname, setSurname] = useState("");
   const [username, setUsername] = useState("");
-  const [phone, setPhone] = useState("");
   const [resetValue, setResetValue] = useState("");
   const [loading, setLoading] = useState(false);
   const role: UserRole = "customer";
@@ -70,7 +69,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
               surname: surname.trim(),
               full_name: fullName,
               username: username.trim(),
-              phone: phone.trim(),
               role,
             },
           },
@@ -78,10 +76,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
         if (error) throw error;
         notify.success("Account created. Check your email if confirmation is enabled.");
         router.replace(roleToPath(role));
-
-        if (phone.trim()) {
-          await supabase.from("profiles").update({ phone: phone.trim() }).eq("id", (await supabase.auth.getUser()).data.user?.id ?? "");
-        }
       }
 
       if (mode === "forgot-password") {
@@ -171,14 +165,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Username"
-                className="h-11 rounded-xl bg-white shadow-sm"
-              />
-              <Input
-                required
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Phone number"
                 className="h-11 rounded-xl bg-white shadow-sm"
               />
               <Input

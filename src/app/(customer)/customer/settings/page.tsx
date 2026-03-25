@@ -10,6 +10,7 @@ export default async function CustomerSettingsPage() {
       <SettingsMenu
         fullName={fullName}
         email={profile?.email || "tycoonjames.flores@msugensan.edu.ph"}
+        avatarKey={profile?.avatar_key}
       />
     </main>
   );

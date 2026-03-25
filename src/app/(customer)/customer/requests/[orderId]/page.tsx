@@ -1,21 +1,9 @@
 import { DeliveryTrackingPanel } from "@/components/customer/delivery-tracking-panel";
+import { TrackingStatusTimeline } from "@/components/customer/tracking-status-timeline";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
-import { ORDER_STATUS_STEPS } from "@/lib/constants";
 import { getMyOrderTrackingDetails } from "@/services/orders";
 import type { OrderStatus } from "@/types/domain";
 import Link from "next/link";
-
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: "Pending",
-  accepted: "Accepted",
-  picked_up: "Picked Up",
-  washing: "Washing",
-  drying: "Drying",
-  ready: "Ready",
-  out_for_delivery: "Out for Delivery",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
 
 export default async function RequestTrackPage({
   params,
@@ -43,7 +31,6 @@ export default async function RequestTrackPage({
   }
 
   const { order, delivery } = tracking;
-  const statusStepIndex = Math.max(0, ORDER_STATUS_STEPS.indexOf(order.status as OrderStatus));
   const estimatedArrival = formatEta(order.etaMinutes ?? delivery.etaMinutes);
   const expectedDelivery = order.deliveryDate ? formatDateTime(order.deliveryDate) : "To be updated";
   const requestId = order.id.slice(0, 16).toUpperCase();
@@ -67,10 +54,7 @@ export default async function RequestTrackPage({
         </div>
       </header>
 
-      <section
-        className="relative h-[18.5rem] border-y border-[#b9d0e1] bg-[linear-gradient(180deg,#f1f4f8_0%,#d9dee3_100%)]"
-        aria-label="Map"
-      >
+      <section className="relative border-y border-[#b9d0e1] bg-[linear-gradient(180deg,#f1f4f8_0%,#d9dee3_100%)] px-4 py-3" aria-label="Map">
         <div
           className="absolute inset-0 opacity-70"
           style={{
@@ -79,10 +63,19 @@ export default async function RequestTrackPage({
             backgroundSize: "28px 28px",
           }}
         />
-        <div className="absolute inset-x-4 bottom-4 rounded-xl bg-white/90 px-3 py-2 text-[0.76rem] font-semibold text-[#2f5878] shadow-[0_8px_20px_rgba(35,63,99,0.18)]">
-          {order.distanceKm !== null
-            ? `Distance ${order.distanceKm.toFixed(1)} km · ETA ${estimatedArrival}`
-            : `Estimated arrival ${estimatedArrival}`}
+        <div className="relative z-10">
+          <DeliveryTrackingPanel
+            orderId={order.id}
+            coordinates={{
+              pickupLat: order.pickupLat,
+              pickupLng: order.pickupLng,
+              dropoffLat: order.dropoffLat,
+              dropoffLng: order.dropoffLng,
+            }}
+          />
+        </div>
+        <div className="relative z-10 mt-3 rounded-xl bg-white/90 px-3 py-2 text-[0.76rem] font-semibold text-[#2f5878] shadow-[0_8px_20px_rgba(35,63,99,0.18)]">
+          {order.distanceKm !== null ? `Distance ${order.distanceKm.toFixed(1)} km · ETA ${estimatedArrival}` : `Estimated arrival ${estimatedArrival}`}
         </div>
       </section>
 
@@ -159,41 +152,7 @@ export default async function RequestTrackPage({
         </section>
 
         <section className="mt-4 border-t border-[#d9e6f0] pt-4">
-          <h2 className="text-[0.9rem] font-black text-[#5e88aa]">Request Status</h2>
-          <div className="mt-2 space-y-2">
-            {ORDER_STATUS_STEPS.map((step, index) => {
-              const complete = order.status !== "cancelled" && index < statusStepIndex;
-              const active = order.status !== "cancelled" && index === statusStepIndex;
-              const pending = !complete && !active;
-
-              return (
-                <div key={step} className="flex items-center gap-2.5">
-                  <span
-                    className={`inline-flex h-4 w-4 rounded-full border ${
-                      complete
-                        ? "border-[#1d94db] bg-[#1d94db]"
-                        : active
-                          ? "border-[#1d94db] bg-white"
-                          : "border-[#c9d8e6] bg-white"
-                    }`}
-                    aria-hidden="true"
-                  />
-                  <p
-                    className={`text-[0.8rem] font-semibold ${
-                      active ? "text-[#1d94db]" : pending ? "text-[#8ba8be]" : "text-[#5f84a2]"
-                    }`}
-                  >
-                    {STATUS_LABELS[step]}
-                  </p>
-                </div>
-              );
-            })}
-            {order.status === "cancelled" ? <p className="text-[0.8rem] font-semibold text-rose-500">This request was cancelled.</p> : null}
-          </div>
-        </section>
-
-        <section className="mt-4">
-          <DeliveryTrackingPanel orderId={order.id} />
+          <TrackingStatusTimeline orderId={order.id} initialStatus={order.status as OrderStatus} />
         </section>
       </section>
     </main>

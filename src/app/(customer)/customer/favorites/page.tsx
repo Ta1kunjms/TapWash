@@ -33,6 +33,7 @@ export default async function CustomerFavoritesPage({
         searchValue={q}
         locationLabel={locationLabel}
         profileInitials={profileInitials}
+        profileAvatarKey={profile?.avatar_key}
         notificationCount={notificationCount}
       />
 

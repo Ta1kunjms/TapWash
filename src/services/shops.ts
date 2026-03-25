@@ -46,8 +46,12 @@ export async function getVerifiedShops(search?: string) {
   return data;
 }
 
-export async function getVerifiedShopsWithServices(search?: string) {
+export async function getVerifiedShopsWithServices(
+  search?: string,
+  options?: { shopId?: string; limit?: number },
+) {
   const supabase = await createClient();
+  const limit = Math.min(120, Math.max(1, options?.limit ?? 40));
   const fullSelect =
     "id, shop_name, description, location, cover_image_url, starting_price, load_capacity_kg, city_id, rating_avg, total_reviews, promo_badge, eta_min, eta_max, lat, lng, services(id, name, description, pricing_model, unit_price, load_capacity_kg, service_option_groups(id, name, option_type, selection_type, is_required, sort_order, service_options(id, name, description, price_delta, price_type, is_default, sort_order)))";
 
@@ -55,7 +59,12 @@ export async function getVerifiedShopsWithServices(search?: string) {
     .from("laundry_shops")
     .select(fullSelect)
     .eq("is_verified", true)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (options?.shopId) {
+    fullQuery = fullQuery.eq("id", options.shopId);
+  }
 
   if (search) {
     fullQuery = fullQuery.or(`shop_name.ilike.%${search}%,location.ilike.%${search}%`);
@@ -76,7 +85,11 @@ export async function getVerifiedShopsWithServices(search?: string) {
       )
       .eq("is_verified", true)
       .order("created_at", { ascending: false })
-      .limit(120);
+      .limit(limit);
+
+    if (options?.shopId) {
+      lightQuery = lightQuery.eq("id", options.shopId);
+    }
 
     if (search) {
       lightQuery = lightQuery.or(`shop_name.ilike.%${search}%,location.ilike.%${search}%`);
@@ -185,6 +198,23 @@ export async function getVerifiedShopByIdWithServices(shopId: string) {
     .eq("id", shopId)
     .maybeSingle();
 
-  if (error) throw error;
-  return data;
+  if (!error) {
+    return data;
+  }
+
+  if ((error as { code?: string }).code === "57014") {
+    const { data: lightData, error: lightError } = await supabase
+      .from("laundry_shops")
+      .select(
+        "id, shop_name, description, location, cover_image_url, starting_price, load_capacity_kg, is_verified, city_id, rating_avg, total_reviews, promo_badge, eta_min, eta_max, lat, lng, services(id, name, description, pricing_model, unit_price, load_capacity_kg)",
+      )
+      .eq("is_verified", true)
+      .eq("id", shopId)
+      .maybeSingle();
+
+    if (lightError) throw lightError;
+    return lightData;
+  }
+
+  throw error;
 }

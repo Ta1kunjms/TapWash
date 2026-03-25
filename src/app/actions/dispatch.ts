@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { assignRider, createVoucher, toggleVoucher, updateDeliveryStatus, updateRiderLocation } from "@/services/riders";
-import { notify } from "@/lib/notify";
 
 export async function assignRiderAction(formData: FormData) {
   try {
@@ -10,9 +9,7 @@ export async function assignRiderAction(formData: FormData) {
     revalidatePath("/shop/dispatch");
     revalidatePath("/shop/orders");
     revalidatePath("/customer/orders");
-    notify.success("Rider assigned successfully");
   } catch (error) {
-    notify.error("Failed to assign rider");
     console.error("Error assigning rider:", error);
   }
 }
@@ -26,9 +23,7 @@ export async function updateDeliveryStatusAction(formData: FormData) {
     revalidatePath("/shop/dispatch");
     revalidatePath("/shop/orders");
     revalidatePath("/customer/orders");
-    notify.success("Delivery status updated successfully");
   } catch (error) {
-    notify.error("Failed to update delivery status");
     console.error("Error updating delivery status:", error);
   }
 }
@@ -61,9 +56,7 @@ export async function createVoucherAction(formData: FormData) {
       minOrderAmount: Number(formData.get("minOrderAmount")),
     });
     revalidatePath("/admin/vouchers");
-    notify.success("Voucher created successfully");
   } catch (error) {
-    notify.error("Failed to create voucher");
     console.error("Error creating voucher:", error);
   }
 }
@@ -73,9 +66,7 @@ export async function toggleVoucherAction(formData: FormData) {
     await toggleVoucher(String(formData.get("voucherId")), String(formData.get("isActive")) === "true");
     revalidatePath("/admin/vouchers");
     const isActive = String(formData.get("isActive")) === "true";
-    notify.success(isActive ? "Voucher activated successfully" : "Voucher deactivated successfully");
   } catch (error) {
-    notify.error("Failed to update voucher status");
     console.error("Error toggling voucher:", error);
   }
 }

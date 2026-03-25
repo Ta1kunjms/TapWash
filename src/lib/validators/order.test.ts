@@ -62,4 +62,12 @@ describe("bookOrderSchema", () => {
       expect(result.error.issues.some((issue) => issue.path.join(".") === "contactPhone")).toBe(true);
     }
   });
+
+  it("rejects unsupported payment methods", () => {
+    const result = bookOrderSchema.safeParse(validPayload({ paymentMethod: "bank_transfer" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join(".") === "paymentMethod")).toBe(true);
+    }
+  });
 });

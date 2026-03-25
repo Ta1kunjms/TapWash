@@ -2,30 +2,27 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
+import { getCustomerAvatarByKey } from "@/lib/avatar-catalog";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   fullName: string;
   email: string;
+  avatarKey?: string | null;
 };
 
-export function SettingsMenu({ fullName, email }: Props) {
+export function SettingsMenu({ fullName, email, avatarKey }: Props) {
   const [open, setOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [avatarImageSrc, setAvatarImageSrc] = useState(getCustomerAvatarByKey(avatarKey).src);
   const router = useRouter();
 
-  const initials = useMemo(
-    () =>
-      fullName
-        .split(" ")
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase() ?? "")
-        .join(""),
-    [fullName],
-  );
+  useEffect(() => {
+    setAvatarImageSrc(getCustomerAvatarByKey(avatarKey).src);
+  }, [avatarKey]);
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -39,9 +36,17 @@ export function SettingsMenu({ fullName, email }: Props) {
     <>
       <section className="space-y-5 pb-2">
         <div className="pt-4 text-center">
-          <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full border-2 border-primary-500 bg-white text-xl font-bold text-primary-500">
-            {initials || "TW"}
-          </div>
+          <Image
+            src={avatarImageSrc}
+            alt={`${fullName} mascot profile photo`}
+            width={80}
+            height={80}
+            sizes="80px"
+            className="mx-auto mb-3 h-20 w-20 rounded-full border-2 border-primary-500 bg-white object-cover"
+            onError={() => {
+              setAvatarImageSrc(getCustomerAvatarByKey(null).src);
+            }}
+          />
           <h1 className="text-2xl font-bold text-text-secondary">{fullName}</h1>
           <p className="text-sm text-text-muted">@{email.split("@")[0] ?? "customer"}</p>
           <p className="text-sm text-text-muted">{email}</p>

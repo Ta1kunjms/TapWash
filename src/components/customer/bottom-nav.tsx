@@ -57,10 +57,14 @@ export function BottomNav() {
 }
 
 function BottomNavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const active =
-    pathname === item.href ||
-    pathname.startsWith(`${item.href}/`) ||
-    (item.href === "/customer/requests" && pathname.startsWith("/customer/orders"));
+  const isCustomerHome = item.href === "/customer";
+  const isRequests = item.href === "/customer/requests";
+
+  const active = isCustomerHome
+    ? pathname === "/customer"
+    : pathname === item.href ||
+      pathname.startsWith(`${item.href}/`) ||
+      (isRequests && pathname.startsWith("/customer/orders"));
 
   return (
     <li>

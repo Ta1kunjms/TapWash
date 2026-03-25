@@ -15,6 +15,29 @@ function jitter() {
 }
 
 export async function POST(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    return Response.json({ error: "Unable to load profile" }, { status: 500 });
+  }
+
+  if (!profile || profile.role !== "admin") {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const payload = await request.json();
   const parsed = simulateSchema.safeParse(payload);
 
@@ -22,7 +45,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid simulation payload" }, { status: 400 });
   }
 
-  const supabase = await createClient();
   const { orderId, riderId, startLat, startLng, targetLat, targetLng } = parsed.data;
 
   const { data: current } = await supabase

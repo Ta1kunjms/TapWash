@@ -222,13 +222,23 @@ export default async function CustomerHomePage({
     return "evening";
   }
 
-  function getRandomGreeting(): string {
-    const timeOfDay = getTimeOfDay();
+  function selectGreeting(timeOfDay: keyof typeof greetings, seed: string): string {
     const options = greetings[timeOfDay];
-    return options[Math.floor(Math.random() * options.length)];
+    if (options.length === 0) return "Welcome to TapWash";
+
+    let hash = 0;
+    for (let i = 0; i < seed.length; i += 1) {
+      hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+
+    const index = hash % options.length;
+    return options[index];
   }
 
-  const greetingMessage = getRandomGreeting();
+  const timeOfDay = getTimeOfDay();
+  const greetingSeed = (firstName ?? "tapwash").trim() || "tapwash";
+  const greetingMessage = selectGreeting(timeOfDay, greetingSeed);
+  const hasPhoneOnProfile = Boolean(profile?.phone?.trim());
 
   return (
     <main className="space-y-5">
@@ -239,6 +249,7 @@ export default async function CustomerHomePage({
         searchHiddenFields={{ favorites: favoritesOnly ? "1" : undefined }}
         locationLabel={locationLabel}
         profileInitials={profileInitials}
+        profileAvatarKey={profile?.avatar_key}
         notificationCount={notificationCount}
       />
 
@@ -247,6 +258,25 @@ export default async function CustomerHomePage({
         <p className="text-lg text-text-secondary/65">{greetingMessage}</p>
         <div className="mt-3 h-px bg-border-muted" />
       </section>
+
+      {!hasPhoneOnProfile ? (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 shadow-soft">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-amber-900">Add your contact number before checkout</p>
+              <p className="text-xs leading-relaxed text-amber-800/90">
+                You can browse shops now, but placing an order requires a valid phone number.
+              </p>
+            </div>
+            <Link
+              href="/customer/settings/profile"
+              className="inline-flex shrink-0 items-center rounded-full bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2"
+            >
+              Update Profile
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       {/* Special Offers section moved above Featured Laundromats */}
       <section className="space-y-3">
