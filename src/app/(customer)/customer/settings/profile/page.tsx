@@ -1,55 +1,46 @@
 import { SubPageHeader } from "@/components/customer/mobile-chrome";
 import { ProfileAvatarPicker } from "@/components/customer/profile-avatar-picker";
-import { createClient } from "@/lib/supabase/server";
+import { changeCustomerPasswordAction, updateCustomerProfileAction } from "@/app/actions/customer";
 import { getCustomerProfile } from "@/services/customer";
-import { revalidatePath } from "next/cache";
+import { getCustomerDictionary } from "@/lib/i18n";
 import { redirect } from "next/navigation";
 
 export default async function CustomerProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; passwordSaved?: string; error?: string }>;
 }) {
-  const { saved } = await searchParams;
+  const { saved, passwordSaved, error } = await searchParams;
   const profile = await getCustomerProfile();
+  const dictionary = getCustomerDictionary(profile?.preferred_language ?? "en");
 
-  async function updateProfileAction(formData: FormData) {
+  async function updateProfileFormAction(formData: FormData) {
     "use server";
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      redirect("/login");
+    const result = await updateCustomerProfileAction(formData);
+    if (!result.ok) {
+      redirect(`/customer/settings/profile?error=${encodeURIComponent(result.message)}`);
     }
 
-    const first_name = String(formData.get("first_name") ?? "").trim();
-    const surname = String(formData.get("surname") ?? "").trim();
-    const phone = String(formData.get("phone") ?? "").trim();
-    const address = String(formData.get("address") ?? "").trim();
-
-    await supabase
-      .from("profiles")
-      .update({
-        first_name: first_name || null,
-        surname: surname || null,
-        phone: phone || null,
-        address: address || null,
-      })
-      .eq("id", user.id);
-
-    revalidatePath("/customer/settings");
-    revalidatePath("/customer/settings/profile");
     redirect("/customer/settings/profile?saved=1");
+  }
+
+  async function updatePasswordFormAction(formData: FormData) {
+    "use server";
+
+    const result = await changeCustomerPasswordAction(formData);
+    if (!result.ok) {
+      redirect(`/customer/settings/profile?error=${encodeURIComponent(result.message)}`);
+    }
+
+    redirect("/customer/settings/profile?passwordSaved=1");
   }
 
   const fullName = [profile?.first_name, profile?.surname].filter(Boolean).join(" ").trim() || "Customer";
 
   return (
     <main className="space-y-4 pb-2">
-      <SubPageHeader title="My Profile" />
+      <SubPageHeader title={dictionary.settings.myProfile} />
 
       <section className="text-center">
         <ProfileAvatarPicker initialAvatarKey={profile?.avatar_key} name={fullName} />
@@ -59,7 +50,7 @@ export default async function CustomerProfilePage({
         <p className="text-sm text-text-muted">{profile?.email ?? "customer@tapwash.app"}</p>
       </section>
 
-      <form action={updateProfileAction} className="space-y-2">
+      <form action={updateProfileFormAction} className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <input
             name="first_name"
@@ -96,21 +87,48 @@ export default async function CustomerProfilePage({
           className="h-11 w-full rounded-xl border border-border-muted bg-white px-3 text-sm text-primary-500"
         />
 
-        <p className="pt-1 text-xs text-primary-500/60">Leave password blank if you don&apos;t want to change it.</p>
+        <button type="submit" className="mt-3 h-12 w-full rounded-full bg-primary-500 text-base font-bold text-white">
+          {dictionary.settings.saveProfile}
+        </button>
+      </form>
+
+      <form action={updatePasswordFormAction} className="space-y-2 rounded-2xl border border-border-muted bg-white p-3">
+        <p className="text-xs font-semibold text-primary-500/70">{dictionary.settings.passwordSecurity}</p>
         <input
+          name="current_password"
           type="password"
-          placeholder="Password"
+          placeholder="Current password"
+          className="h-11 w-full rounded-xl border border-border-muted bg-white px-3 text-sm text-primary-500"
+        />
+        <input
+          name="new_password"
+          type="password"
+          placeholder="New password"
+          className="h-11 w-full rounded-xl border border-border-muted bg-white px-3 text-sm text-primary-500"
+        />
+        <input
+          name="confirm_password"
+          type="password"
+          placeholder="Confirm new password"
           className="h-11 w-full rounded-xl border border-border-muted bg-white px-3 text-sm text-primary-500"
         />
 
-        <button type="submit" className="mt-3 h-12 w-full rounded-full bg-primary-500 text-base font-bold text-white">
-          Confirm
+        <button type="submit" className="h-11 w-full rounded-xl bg-primary-500 text-sm font-bold text-white">
+          {dictionary.settings.updatePassword}
         </button>
       </form>
 
       {saved === "1" && (
-        <p className="text-center text-sm font-semibold text-primary-500">Profile updated successfully.</p>
+        <p className="text-center text-sm font-semibold text-primary-500">{dictionary.settings.profileSaved}</p>
       )}
+
+      {passwordSaved === "1" && (
+        <p className="text-center text-sm font-semibold text-primary-500">{dictionary.settings.passwordSaved}</p>
+      )}
+
+      {error ? (
+        <p className="text-center text-sm font-semibold text-rose-600">{error}</p>
+      ) : null}
     </main>
   );
 }

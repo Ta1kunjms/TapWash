@@ -28,6 +28,11 @@ type FeedQueryResult = {
   hasMore: boolean;
 };
 
+type FeedSourceQueryResult = {
+  rows: FeedQueryResult["rows"];
+  total: number;
+};
+
 export async function getVerifiedShops(search?: string) {
   const supabase = await createClient();
   let query = supabase
@@ -167,6 +172,68 @@ export async function getVerifiedShopsFeedPage(input: FeedQueryInput): Promise<F
       rows,
       total: from + rows.length,
       hasMore: rows.length === limit,
+    };
+  }
+
+  throw error;
+}
+
+export async function getVerifiedShopsFeedSource(
+  search?: string,
+  options?: { limit?: number },
+): Promise<FeedSourceQueryResult> {
+  const supabase = await createClient();
+  const limit = Math.min(500, Math.max(50, options?.limit ?? 300));
+
+  let query = supabase
+    .from("laundry_shops")
+    .select(
+      "id, shop_name, description, location, cover_image_url, starting_price, load_capacity_kg, rating_avg, total_reviews, promo_badge, eta_min, eta_max, lat, lng, services(name)",
+      { count: "planned" },
+    )
+    .eq("is_verified", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (search) {
+    query = query.or(`shop_name.ilike.%${search}%,location.ilike.%${search}%`);
+  }
+
+  const { data, error, count } = await query;
+  if (!error) {
+    return {
+      rows: (data ?? []) as FeedQueryResult["rows"],
+      total: count ?? data?.length ?? 0,
+    };
+  }
+
+  if ((error as { code?: string }).code === "57014") {
+    let fallbackQuery = supabase
+      .from("laundry_shops")
+      .select(
+        "id, shop_name, description, location, cover_image_url, starting_price, load_capacity_kg, rating_avg, total_reviews, promo_badge, eta_min, eta_max, lat, lng",
+      )
+      .eq("is_verified", true)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (search) {
+      fallbackQuery = fallbackQuery.or(`shop_name.ilike.%${search}%,location.ilike.%${search}%`);
+    }
+
+    const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+    if (fallbackError) {
+      throw fallbackError;
+    }
+
+    const rows = ((fallbackData ?? []) as Array<Record<string, unknown>>).map((entry) => ({
+      ...(entry as Omit<FeedQueryResult["rows"][number], "services">),
+      services: [],
+    }));
+
+    return {
+      rows,
+      total: rows.length,
     };
   }
 

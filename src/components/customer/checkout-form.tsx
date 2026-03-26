@@ -53,6 +53,7 @@ export type CheckoutFormProps = {
   } | null;
   initialSavedAddresses?: string[];
   initialContactPhone?: string;
+  initialPaymentMethod?: PaymentMethod;
 };
 
 type CheckoutBucketSelection = {
@@ -83,6 +84,7 @@ export function CheckoutForm({
   initialSelectedAddress,
   initialSavedAddresses,
   initialContactPhone,
+  initialPaymentMethod,
 }: CheckoutFormProps) {
   const selectedShop = useMemo(
     () => shops.find((shop) => shop.id === initialShopId) ?? shops[0],
@@ -120,7 +122,7 @@ export function CheckoutForm({
   );
   const [pickupDate, setPickupDate] = useState(() => initialDraft?.pickupDate ?? getDefaultPickupDateTime());
   const [deliveryDate, setDeliveryDate] = useState(() => initialDraft?.deliveryDate ?? getDefaultDeliveryDateTime());
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => initialDraft?.paymentMethod ?? "cod");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => initialDraft?.paymentMethod ?? initialPaymentMethod ?? "cod");
   const [promoCode, setPromoCode] = useState(() => initialDraft?.promoCode ?? initialPromoCode ?? "");
   const [contactPhone, setContactPhone] = useState(() => initialDraft?.contactPhone ?? initialContactPhone ?? "");
   const [deliveryInstructions, setDeliveryInstructions] = useState(() => initialDraft?.deliveryInstructions ?? "");

@@ -1,12 +1,16 @@
 import { FavoriteToggleButton } from "@/components/customer/favorite-toggle-button";
 import { HomeLaundromatFeed } from "@/components/customer/home-laundromat-feed";
+import { HomeOfferCard } from "@/components/customer/home-offer-card";
+import { HomeGreetingMascotRotator } from "@/components/customer/home-greeting-mascot-rotator";
 import { MobileTopBar } from "@/components/customer/mobile-chrome";
+import { ServiceAreaMap } from "@/components/customer/service-area-map";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
 import { haversineDistanceKm } from "@/lib/delivery-quote";
 import { getSelectedCustomerAddress } from "@/services/addresses";
 import { getVerifiedShops } from "@/services/shops";
 import { getCustomerProfile, getInitials } from "@/services/customer";
 import { listFavoriteShopIds } from "@/services/favorites";
+import { getActiveHomeOffers } from "@/services/home-offers";
 import { getUnreadNotificationCount } from "@/services/notifications";
 
 import Link from "next/link";
@@ -19,11 +23,12 @@ export default async function CustomerHomePage({
 }) {
   const { q, favorites } = await searchParams;
   const favoritesOnly = favorites === "1";
-  const [profile, selectedAddress, favoriteShopIds, notificationCount] = await Promise.all([
+  const [profile, selectedAddress, favoriteShopIds, notificationCount, homeOffers] = await Promise.all([
     getCustomerProfile(),
     getSelectedCustomerAddress(),
     listFavoriteShopIds(),
     getUnreadNotificationCount(),
+    getActiveHomeOffers(4),
   ]);
   const firstName = profile?.first_name?.trim() || "Tycoon";
   const profileInitials = getInitials(profile?.first_name ?? null, profile?.surname ?? null) || "TW";
@@ -254,8 +259,13 @@ export default async function CustomerHomePage({
       />
 
       <section className="space-y-1">
-        <h1 className="text-3xl font-bold leading-tight text-primary-500">Hello {firstName}!</h1>
-        <p className="text-lg text-text-secondary/65">{greetingMessage}</p>
+        <div className="flex items-center gap-0.5 sm:gap-2">
+          <HomeGreetingMascotRotator />
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-3xl font-bold leading-tight text-primary-500">Hello {firstName}!</h1>
+            <p className="text-lg text-text-secondary/65">{greetingMessage}</p>
+          </div>
+        </div>
         <div className="mt-3 h-px bg-border-muted" />
       </section>
 
@@ -278,15 +288,16 @@ export default async function CustomerHomePage({
         </section>
       ) : null}
 
-      {/* Special Offers section moved above Featured Laundromats */}
-      <section className="space-y-3">
-        <h2 className="text-xl font-bold text-text-secondary/80">Special Offers</h2>
-        <div className="rounded-2xl bg-gradient-to-r from-primary-500 via-primary-500/90 to-primary-500/70 p-4 text-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lg">
-          <p className="text-xs font-semibold tracking-widest text-white/85">LIMITED PROMO</p>
-          <p className="mt-1 text-2xl font-black">Flash Sale up to 50% OFF</p>
-          <p className="mt-1 text-sm text-white/85">Apply vouchers on checkout and enjoy same-day pickup.</p>
-        </div>
-      </section>
+      {homeOffers.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="text-xl font-bold text-text-secondary/80">Special Offers</h2>
+          <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1 scrollbar-hidden">
+            {homeOffers.map((offer) => (
+              <HomeOfferCard key={offer.id} offer={offer} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* Featured Laundromats section moved below Special Offers */}
       <section className="space-y-3">
@@ -370,21 +381,35 @@ export default async function CustomerHomePage({
       <section className="space-y-3 pb-2">
         <h2 className="text-xl font-bold text-text-secondary/80">Service Map</h2>
         <div className="overflow-hidden rounded-2xl border border-border-muted bg-white shadow-soft">
-          <div className="h-40 bg-[linear-gradient(135deg,rgba(30,136,229,0.14)_0%,rgba(30,136,229,0.06)_55%,rgba(255,255,255,0.95)_100%)] p-4">
-            <div className="flex h-full items-end justify-between">
-              <div>
-                <p className="text-sm font-semibold text-text-secondary">Nearby coverage area</p>
-                <p className="text-xs text-text-muted">Live route estimate appears during booking.</p>
+          {featured.length > 0 ? (
+            <ServiceAreaMap
+              shops={featured
+                .filter((shop) => typeof shop.lat === "number" && typeof shop.lng === "number")
+                .map((shop) => ({
+                  id: shop.id,
+                  shop_name: shop.shop_name,
+                  lat: shop.lat as number,
+                  lng: shop.lng as number,
+                }))}
+              userLocation={typeof userLat === "number" && typeof userLng === "number" ? { lat: userLat, lng: userLng } : undefined}
+            />
+          ) : (
+            <div className="h-40 bg-[linear-gradient(135deg,rgba(30,136,229,0.14)_0%,rgba(30,136,229,0.06)_55%,rgba(255,255,255,0.95)_100%)] p-4">
+              <div className="flex h-full items-end justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-text-secondary">Nearby coverage area</p>
+                  <p className="text-xs text-text-muted">No mappable laundromats available yet.</p>
+                </div>
+                <Link
+                  href="/customer/shops"
+                  className="inline-flex items-center gap-1 rounded-xl bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-500/90"
+                >
+                  <FlaticonIcon name="plus" className="text-xs" />
+                  Explore Shops
+                </Link>
               </div>
-              <Link
-                href="/customer/shops"
-                className="inline-flex items-center gap-1 rounded-xl bg-primary-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-500/90"
-              >
-                <FlaticonIcon name="plus" className="text-xs" />
-                Explore Shops
-              </Link>
             </div>
-          </div>
+          )}
         </div>
       </section>
 

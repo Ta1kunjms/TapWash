@@ -43,6 +43,23 @@ export interface AdminVoucherRow {
   created_at: string;
 }
 
+export interface AdminHomeOfferRow {
+  id: string;
+  badge_label: string;
+  title: string;
+  subtitle: string | null;
+  cta_label: string;
+  cta_href: string;
+  accent_from: string;
+  accent_to: string;
+  audience: "all" | "new" | "returning" | "favorites";
+  priority: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 export async function verifyShop(shopId: string, isVerified: boolean): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase
@@ -263,6 +280,106 @@ export async function toggleVoucher(voucherId: string, isActive: boolean): Promi
     .from("vouchers")
     .update({ is_active: isActive })
     .eq("id", voucherId);
+
+  if (error) throw error;
+}
+
+export async function listHomeOffers(): Promise<AdminHomeOfferRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("home_offers")
+    .select(
+      "id, badge_label, title, subtitle, cta_label, cta_href, accent_from, accent_to, audience, priority, starts_at, ends_at, is_active, created_at",
+    )
+    .order("priority", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as AdminHomeOfferRow[];
+}
+
+export async function createHomeOffer(input: {
+  badgeLabel: string;
+  title: string;
+  subtitle?: string;
+  ctaLabel: string;
+  ctaHref: string;
+  accentFrom: string;
+  accentTo: string;
+  audience: "all" | "new" | "returning" | "favorites";
+  priority: number;
+  startsAt?: string;
+  endsAt?: string;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("home_offers").insert({
+    badge_label: input.badgeLabel.trim() || "LIMITED PROMO",
+    title: input.title.trim(),
+    subtitle: input.subtitle?.trim() || null,
+    cta_label: input.ctaLabel.trim() || "Claim Offer",
+    cta_href: input.ctaHref.trim() || "/customer/vouchers",
+    accent_from: input.accentFrom.trim() || "#1e88e5",
+    accent_to: input.accentTo.trim() || "#5bb8ff",
+    audience: input.audience,
+    priority: input.priority,
+    starts_at: input.startsAt?.trim() || null,
+    ends_at: input.endsAt?.trim() || null,
+    is_active: true,
+  });
+
+  if (error) throw error;
+}
+
+export async function updateHomeOffer(input: {
+  offerId: string;
+  badgeLabel: string;
+  title: string;
+  subtitle?: string;
+  ctaLabel: string;
+  ctaHref: string;
+  accentFrom: string;
+  accentTo: string;
+  audience: "all" | "new" | "returning" | "favorites";
+  priority: number;
+  startsAt?: string;
+  endsAt?: string;
+  isActive: boolean;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("home_offers")
+    .update({
+      badge_label: input.badgeLabel.trim() || "LIMITED PROMO",
+      title: input.title.trim(),
+      subtitle: input.subtitle?.trim() || null,
+      cta_label: input.ctaLabel.trim() || "Claim Offer",
+      cta_href: input.ctaHref.trim() || "/customer/vouchers",
+      accent_from: input.accentFrom.trim() || "#1e88e5",
+      accent_to: input.accentTo.trim() || "#5bb8ff",
+      audience: input.audience,
+      priority: input.priority,
+      starts_at: input.startsAt?.trim() || null,
+      ends_at: input.endsAt?.trim() || null,
+      is_active: input.isActive,
+    })
+    .eq("id", input.offerId);
+
+  if (error) throw error;
+}
+
+export async function toggleHomeOffer(offerId: string, isActive: boolean): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("home_offers")
+    .update({ is_active: isActive })
+    .eq("id", offerId);
+
+  if (error) throw error;
+}
+
+export async function deleteHomeOffer(offerId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("home_offers").delete().eq("id", offerId);
 
   if (error) throw error;
 }

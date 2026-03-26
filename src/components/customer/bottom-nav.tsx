@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
+import { getCustomerDictionary, normalizeLocale } from "@/lib/i18n";
+import { useMemo, useState } from "react";
 
 type NavItem = {
   href: string;
@@ -11,25 +13,41 @@ type NavItem = {
   icon: "home" | "heart" | "orders" | "settings";
 };
 
-const NAV_ITEMS: NavItem[] = [
-  { href: "/customer", label: "Home", icon: "home" as const },
-  { href: "/customer/favorites", label: "Favorites", icon: "heart" as const },
-  { href: "/customer/requests", label: "Requests", icon: "orders" as const },
-  { href: "/customer/settings", label: "Settings", icon: "settings" as const },
-];
-
 const NAV_TRANSITION_MS = 260;
 
 export function BottomNav() {
   const pathname = usePathname();
+  const [locale] = useState(() => {
+    if (typeof document === "undefined") {
+      return normalizeLocale(undefined);
+    }
+
+    const localeCookie = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith("tapwash.locale="))
+      ?.split("=")[1];
+
+    return normalizeLocale(localeCookie);
+  });
+  const dictionary = getCustomerDictionary(locale);
+  const navItems = useMemo<NavItem[]>(
+    () => [
+      { href: "/customer", label: dictionary.navigation.home, icon: "home" as const },
+      { href: "/customer/favorites", label: dictionary.navigation.favorites, icon: "heart" as const },
+      { href: "/customer/requests", label: dictionary.navigation.requests, icon: "orders" as const },
+      { href: "/customer/settings", label: dictionary.navigation.settings, icon: "settings" as const },
+    ],
+    [dictionary.navigation.favorites, dictionary.navigation.home, dictionary.navigation.requests, dictionary.navigation.settings],
+  );
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 w-full md:hidden" aria-label="Bottom navigation">
       <div className="mx-auto w-full max-w-md px-3 pb-[calc(0.6rem+env(safe-area-inset-bottom))]">
         <div className="relative rounded-full border border-border-muted/75 bg-white/95 shadow-[0_10px_28px_rgba(15,23,42,0.16),0_2px_10px_rgba(15,23,42,0.08)] backdrop-blur">
           <ul className="grid h-[4.4rem] grid-cols-5 items-center">
-            <BottomNavLink item={NAV_ITEMS[0]} pathname={pathname} />
-            <BottomNavLink item={NAV_ITEMS[1]} pathname={pathname} />
+            <BottomNavLink item={navItems[0]} pathname={pathname} />
+            <BottomNavLink item={navItems[1]} pathname={pathname} />
 
             <li className="flex items-center justify-center">
               <span
@@ -47,8 +65,8 @@ export function BottomNav() {
               </span>
             </li>
 
-            <BottomNavLink item={NAV_ITEMS[2]} pathname={pathname} />
-            <BottomNavLink item={NAV_ITEMS[3]} pathname={pathname} />
+            <BottomNavLink item={navItems[2]} pathname={pathname} />
+            <BottomNavLink item={navItems[3]} pathname={pathname} />
           </ul>
         </div>
       </div>

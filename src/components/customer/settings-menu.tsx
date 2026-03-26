@@ -12,9 +12,22 @@ type Props = {
   fullName: string;
   email: string;
   avatarKey?: string | null;
+  preferredLanguage: string;
+  defaultPaymentLabel: string;
+  labels: {
+    editProfile: string;
+    paymentMethod: string;
+    language: string;
+    helpCenter: string;
+    logout: string;
+    readyToLeave: string;
+    leavingDescription: string;
+    staySignedIn: string;
+    confirmSignOut: string;
+  };
 };
 
-export function SettingsMenu({ fullName, email, avatarKey }: Props) {
+export function SettingsMenu({ fullName, email, avatarKey, preferredLanguage, defaultPaymentLabel, labels }: Props) {
   const [open, setOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [avatarImageSrc, setAvatarImageSrc] = useState(getCustomerAvatarByKey(avatarKey).src);
@@ -53,10 +66,10 @@ export function SettingsMenu({ fullName, email, avatarKey }: Props) {
         </div>
 
         <div className="space-y-3">
-          <SettingsLink href="/customer/settings/profile" label="Edit Profile" icon="person" />
-          <SettingsLink href="/customer/settings/payment" label="Payment Method" icon="wallet" />
-          <SettingsLink href="/customer/settings/language" label="Language" icon="language" />
-          <SettingsLink href="/customer/settings/help" label="Help Center" icon="help" />
+          <SettingsLink href="/customer/settings/profile" label={labels.editProfile} icon="person" />
+          <SettingsLink href="/customer/settings/payment" label={labels.paymentMethod} subtitle={defaultPaymentLabel} icon="wallet" />
+          <SettingsLink href="/customer/settings/language" label={labels.language} subtitle={preferredLanguage.toUpperCase()} icon="language" />
+          <SettingsLink href="/customer/settings/help" label={labels.helpCenter} icon="help" />
 
           <button
             type="button"
@@ -65,7 +78,7 @@ export function SettingsMenu({ fullName, email, avatarKey }: Props) {
           >
             <span className="flex items-center gap-3 text-sm font-semibold text-primary-500">
               <LogoutIcon />
-              Logout
+              {labels.logout}
             </span>
             <span className="text-primary-500">›</span>
           </button>
@@ -78,15 +91,15 @@ export function SettingsMenu({ fullName, email, avatarKey }: Props) {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary-500/10 text-primary-500">
               <LogoutIcon />
             </div>
-            <h2 className="text-lg font-bold text-text-secondary">Ready to leave?</h2>
-            <p className="mt-1 text-sm text-text-muted">You&apos;re about to sign out of TapWash.</p>
+            <h2 className="text-lg font-bold text-text-secondary">{labels.readyToLeave}</h2>
+            <p className="mt-1 text-sm text-text-muted">{labels.leavingDescription}</p>
             <div className="mt-4 flex gap-2">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="h-10 flex-1 rounded-xl border border-border-muted bg-surface-card text-xs font-semibold text-text-secondary"
               >
-                Stay Signed In
+                {labels.staySignedIn}
               </button>
               <button
                 type="button"
@@ -94,7 +107,7 @@ export function SettingsMenu({ fullName, email, avatarKey }: Props) {
                 disabled={isSigningOut}
                 className="h-10 flex-1 rounded-xl bg-primary-500 text-xs font-semibold text-white disabled:opacity-70"
               >
-                {isSigningOut ? "Signing out..." : "Yes, Sign Out"}
+                {isSigningOut ? "Signing out..." : labels.confirmSignOut}
               </button>
             </div>
           </div>
@@ -104,15 +117,28 @@ export function SettingsMenu({ fullName, email, avatarKey }: Props) {
   );
 }
 
-function SettingsLink({ href, label, icon }: { href: string; label: string; icon: "person" | "wallet" | "language" | "help" }) {
+function SettingsLink({
+  href,
+  label,
+  subtitle,
+  icon,
+}: {
+  href: string;
+  label: string;
+  subtitle?: string;
+  icon: "person" | "wallet" | "language" | "help";
+}) {
   return (
     <Link
       href={href}
       className="flex items-center justify-between rounded-2xl border border-border-muted bg-surface-card px-4 py-4 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
     >
-      <span className="flex items-center gap-3 text-sm font-semibold text-text-secondary">
+      <span className="flex items-center gap-3 text-sm text-text-secondary">
         <span className="text-primary-500">{iconSymbol(icon)}</span>
-        {label}
+        <span>
+          <span className="block text-sm font-semibold">{label}</span>
+          {subtitle ? <span className="block text-xs text-text-muted">{subtitle}</span> : null}
+        </span>
       </span>
       <span className="text-text-secondary">›</span>
     </Link>

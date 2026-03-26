@@ -1,9 +1,11 @@
 import { FavoriteToggleButton } from "@/components/customer/favorite-toggle-button";
 import { FlaticonIcon } from "@/components/ui/flaticon-icon";
+import { getCustomerDictionary } from "@/lib/i18n";
 import { formatOptionPriceDelta, formatServiceRateLabel, type PricingOptionGroup, type PricingService } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import { roleToPath } from "@/lib/roles";
 import { getCurrentUserRole } from "@/services/auth";
+import { getCustomerProfile } from "@/services/customer";
 import { listFavoriteShopIds } from "@/services/favorites";
 import { getVerifiedShopByIdWithServices } from "@/services/shops";
 import Image from "next/image";
@@ -26,10 +28,12 @@ export default async function CustomerShopDetailPage({
   if (role !== "customer") redirect(roleToPath(role));
 
   const { shopId } = await params;
-  const [shop, favoriteShopIds] = await Promise.all([
+  const [shop, favoriteShopIds, profile] = await Promise.all([
     getVerifiedShopByIdWithServices(shopId),
     listFavoriteShopIds(),
+    getCustomerProfile(),
   ]);
+  const dictionary = getCustomerDictionary(profile?.preferred_language ?? "en");
 
   if (!shop) {
     notFound();
@@ -96,7 +100,7 @@ export default async function CustomerShopDetailPage({
           <Link
             href="/customer"
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/85 text-primary-500 shadow-sm backdrop-blur-sm"
-            aria-label="Go back"
+            aria-label={dictionary.shop.goBack}
           >
             <FlaticonIcon name="angle-small-left" className="text-xl" />
           </Link>
@@ -105,7 +109,7 @@ export default async function CustomerShopDetailPage({
             <button
               type="button"
               className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/85 text-primary-500 shadow-sm backdrop-blur-sm"
-              aria-label="Share"
+              aria-label={dictionary.shop.share}
             >
               <FlaticonIcon name="share" className="text-base" />
             </button>
@@ -128,7 +132,7 @@ export default async function CustomerShopDetailPage({
               {shop.is_verified && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-primary-500/10 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-primary-500">
                   <FlaticonIcon name="badge-check" className="text-[0.7rem]" />
-                  Verified
+                  {dictionary.shop.verified}
                 </span>
               )}
             </div>
@@ -136,7 +140,7 @@ export default async function CustomerShopDetailPage({
           </div>
           <div className="text-right shrink-0">
             <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-text-muted">
-              Starting from
+              {dictionary.shop.startingFrom}
             </p>
             <p className="text-2xl font-black text-primary-500 leading-tight">
               ₱{shop.starting_price.toFixed(0)}
@@ -157,24 +161,24 @@ export default async function CustomerShopDetailPage({
           <div className="flex items-center gap-1 text-text-muted">
             <FlaticonIcon name="weight" className="text-sm text-primary-500/60" />
             <span className="text-xs font-medium">
-              {shop.load_capacity_kg.toFixed(0)} kg capacity
+              {shop.load_capacity_kg.toFixed(0)} {dictionary.shop.capacitySuffix}
             </span>
           </div>
           <div className="h-3.5 w-px bg-border-muted" />
           <div className="flex items-center gap-1 text-text-muted">
             <FlaticonIcon name="clock" className="text-sm text-primary-500/60" />
-            <span className="text-xs font-medium">24 hr turnaround</span>
+            <span className="text-xs font-medium">{dictionary.shop.turnaround24h}</span>
           </div>
         </div>
 
         {/* About */}
         <div className="mb-5">
           <h2 className="mb-2 text-xs font-black uppercase tracking-widest text-primary-500/70">
-            About
+            {dictionary.shop.about}
           </h2>
           <p className="text-sm leading-relaxed text-text-secondary">
             {shop.description ||
-              "A trusted laundromat offering reliable wash–dry–fold, express laundry, dry cleaning, and stain treatment. Known for modern equipment, fast turnaround, and excellent service."}
+              dictionary.shop.aboutFallback}
           </p>
         </div>
 
@@ -183,10 +187,10 @@ export default async function CustomerShopDetailPage({
         {/* Services */}
         <div className="mb-5">
           <h2 className="mb-3 text-xs font-black uppercase tracking-widest text-primary-500/70">
-            Services
+            {dictionary.shop.services}
           </h2>
           {services.length === 0 ? (
-            <p className="text-sm text-text-muted">No services available yet.</p>
+            <p className="text-sm text-text-muted">{dictionary.shop.noServices}</p>
           ) : (
             <ul className="space-y-2">
               {services.map((service) => {
@@ -239,7 +243,7 @@ export default async function CustomerShopDetailPage({
             <div className="my-5 border-t border-border-muted" />
             <div className="mb-5">
               <h2 className="mb-3 text-xs font-black uppercase tracking-widest text-primary-500/70">
-                Care Options
+                {dictionary.shop.careOptions}
               </h2>
               <div className="space-y-2">
                 {services
@@ -282,7 +286,7 @@ export default async function CustomerShopDetailPage({
             <div className="my-5 border-t border-border-muted" />
             <div className="mb-5">
               <h2 className="mb-3 text-xs font-black uppercase tracking-widest text-primary-500/70">
-                Popular Add-ons
+                {dictionary.shop.popularAddons}
               </h2>
               <div className="flex flex-wrap gap-2">
                 {suggestedAddOns.map((name) => (
@@ -308,7 +312,7 @@ export default async function CustomerShopDetailPage({
             className="pointer-events-auto flex h-12 items-center justify-center gap-2 rounded-full bg-[#43a9eb] px-8 text-center text-[1.2rem] font-bold leading-none text-white shadow-[0_12px_26px_rgba(33,126,191,0.35)] transition hover:bg-[#389fdf]"
           >
             <FlaticonIcon name="shopping-cart" className="text-lg" />
-            Show Bucket
+            {dictionary.shop.showBucket}
           </Link>
         </div>
       </div>

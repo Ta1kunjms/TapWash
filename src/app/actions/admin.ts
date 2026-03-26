@@ -2,17 +2,23 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  createHomeOffer,
   createAdminVoucher,
   createShop,
+  deleteHomeOffer,
   deleteShop,
   deleteVoucher,
   setUserSuspended,
+  toggleHomeOffer,
+  updateHomeOffer,
   toggleVoucher,
   updateShop,
   updateUserProfile,
   updateVoucher,
   verifyShop,
 } from "@/services/admin";
+import { updateSupportTicketStatus } from "@/services/support";
+import { supportTicketStatusUpdateSchema } from "@/lib/validators/settings";
 
 function toNumber(value: FormDataEntryValue | null, fallback = 0): number {
   const parsed = Number(value);
@@ -155,5 +161,94 @@ export async function deleteVoucherAction(formData: FormData) {
     revalidatePath("/admin/vouchers");
   } catch (error) {
     console.error("Error deleting voucher:", error);
+  }
+}
+
+export async function updateSupportTicketStatusAction(formData: FormData) {
+  const parsed = supportTicketStatusUpdateSchema.safeParse({
+    ticketId: formData.get("ticketId"),
+    status: formData.get("status"),
+    adminNote: formData.get("adminNote"),
+  });
+
+  if (!parsed.success) {
+    console.error("Invalid support ticket payload", parsed.error.flatten());
+    return;
+  }
+
+  try {
+    await updateSupportTicketStatus(parsed.data);
+    revalidatePath("/admin/support");
+    revalidatePath("/customer/settings/help");
+  } catch (error) {
+    console.error("Error updating support ticket:", error);
+  }
+}
+
+export async function createHomeOfferAction(formData: FormData) {
+  try {
+    await createHomeOffer({
+      badgeLabel: String(formData.get("badgeLabel") ?? "").trim(),
+      title: String(formData.get("title") ?? "").trim(),
+      subtitle: String(formData.get("subtitle") ?? "").trim(),
+      ctaLabel: String(formData.get("ctaLabel") ?? "").trim(),
+      ctaHref: String(formData.get("ctaHref") ?? "").trim(),
+      accentFrom: String(formData.get("accentFrom") ?? "").trim(),
+      accentTo: String(formData.get("accentTo") ?? "").trim(),
+      audience: String(formData.get("audience") ?? "all") as "all" | "new" | "returning" | "favorites",
+      priority: toNumber(formData.get("priority"), 0),
+      startsAt: String(formData.get("startsAt") ?? "").trim(),
+      endsAt: String(formData.get("endsAt") ?? "").trim(),
+    });
+    revalidatePath("/admin/offers");
+    revalidatePath("/admin");
+    revalidatePath("/customer");
+  } catch (error) {
+    console.error("Error creating home offer:", error);
+  }
+}
+
+export async function updateHomeOfferAction(formData: FormData) {
+  try {
+    await updateHomeOffer({
+      offerId: String(formData.get("offerId") ?? "").trim(),
+      badgeLabel: String(formData.get("badgeLabel") ?? "").trim(),
+      title: String(formData.get("title") ?? "").trim(),
+      subtitle: String(formData.get("subtitle") ?? "").trim(),
+      ctaLabel: String(formData.get("ctaLabel") ?? "").trim(),
+      ctaHref: String(formData.get("ctaHref") ?? "").trim(),
+      accentFrom: String(formData.get("accentFrom") ?? "").trim(),
+      accentTo: String(formData.get("accentTo") ?? "").trim(),
+      audience: String(formData.get("audience") ?? "all") as "all" | "new" | "returning" | "favorites",
+      priority: toNumber(formData.get("priority"), 0),
+      startsAt: String(formData.get("startsAt") ?? "").trim(),
+      endsAt: String(formData.get("endsAt") ?? "").trim(),
+      isActive: String(formData.get("isActive")) === "true",
+    });
+    revalidatePath("/admin/offers");
+    revalidatePath("/customer");
+  } catch (error) {
+    console.error("Error updating home offer:", error);
+  }
+}
+
+export async function toggleHomeOfferAction(formData: FormData) {
+  try {
+    const isActive = String(formData.get("isActive")) === "true";
+    await toggleHomeOffer(String(formData.get("offerId") ?? ""), isActive);
+    revalidatePath("/admin/offers");
+    revalidatePath("/customer");
+  } catch (error) {
+    console.error("Error toggling home offer:", error);
+  }
+}
+
+export async function deleteHomeOfferAction(formData: FormData) {
+  try {
+    await deleteHomeOffer(String(formData.get("offerId") ?? ""));
+    revalidatePath("/admin/offers");
+    revalidatePath("/customer");
+  } catch (error) {
+    console.error("Error deleting home offer:", error);
   }
 }

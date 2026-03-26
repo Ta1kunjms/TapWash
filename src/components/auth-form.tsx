@@ -3,9 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { notify } from "@/lib/notify";
+import { getAuthDictionary } from "@/lib/i18n";
 import { roleToPath } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/client";
-import type { UserRole } from "@/types/domain";
+import type { SupportedLanguage, UserRole } from "@/types/domain";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,7 +15,7 @@ import brandAsset from "../../Logo/Asset 16@300x.png";
 
 type Mode = "signin" | "signup" | "forgot-password";
 
-export function AuthForm({ mode }: { mode: Mode }) {
+export function AuthForm({ mode, locale }: { mode: Mode; locale: SupportedLanguage }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const router = useRouter();
@@ -28,6 +29,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [resetValue, setResetValue] = useState("");
   const [loading, setLoading] = useState(false);
   const role: UserRole = "customer";
+  const dictionary = getAuthDictionary(locale);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,9 +103,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const isForgot = mode === "forgot-password";
 
   const heading =
-    mode === "signin" ? "Welcome back!" : isSignup ? "Create account" : "Reset password";
+    mode === "signin" ? dictionary.headingSignIn : isSignup ? dictionary.headingSignUp : dictionary.headingForgotPassword;
   const ctaText =
-    mode === "signin" ? "Sign In" : isSignup ? "Create Account" : "Send Reset Link";
+    mode === "signin" ? dictionary.signInCta : isSignup ? dictionary.signUpCta : dictionary.forgotCta;
 
   return (
     <main className="mx-auto flex h-dvh w-full max-w-[430px] flex-col bg-background-app px-6">
@@ -119,10 +121,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
           <h1 className="text-3xl font-bold tracking-tight text-text-primary">{heading}</h1>
           <p className="mt-1 text-sm text-text-secondary/55">
             {mode === "signin"
-              ? "Sign in to continue to TapWash."
+              ? dictionary.signInSubheading
               : isSignup
-                ? "Join TapWash and get started today."
-                : "Enter your email and we'll send a reset link."}
+                ? dictionary.signUpSubheading
+                : dictionary.forgotSubheading}
           </p>
         </div>
 

@@ -13,6 +13,9 @@ export type OrderStatus =
 
 export type PaymentStatus = "unpaid" | "partially_paid" | "paid" | "refunded";
 export type PaymentMethod = "cod" | "gcash" | "card";
+export type SupportedLanguage = "en" | "ar" | "hi" | "ur" | "bn" | "tl" | "fa" | "ne" | "si";
+export type SupportTopic = "wash-services" | "scheduling" | "payments" | "account" | "other";
+export type SupportTicketStatus = "open" | "in_progress" | "resolved" | "closed";
 export type DeliveryStatus = "assigned" | "picked_up" | "in_transit" | "delivered" | "failed" | "cancelled";
 export type ServicePricingModel = "per_kg" | "per_load";
 export type ServiceOptionType = "detergent" | "fabcon" | "addon";
@@ -32,7 +35,45 @@ export interface Profile {
   location_permission_status: "granted" | "denied" | "unsupported" | null;
   location_permission_updated_at: string | null;
   location_onboarding_last_prompted_at: string | null;
+  preferred_language: SupportedLanguage;
   created_at: string;
+}
+
+export interface CustomerPaymentPreference {
+  id: string;
+  customer_id: string;
+  method: PaymentMethod;
+  display_label: string | null;
+  masked_reference: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HelpArticle {
+  id: string;
+  topic: Exclude<SupportTopic, "other">;
+  locale: SupportedLanguage;
+  title: string;
+  summary: string | null;
+  content: string;
+  sort_order: number;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  customer_id: string;
+  topic: SupportTopic;
+  subject: string;
+  message: string;
+  status: SupportTicketStatus;
+  admin_note: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
 }
 
 export interface LaundryShop {

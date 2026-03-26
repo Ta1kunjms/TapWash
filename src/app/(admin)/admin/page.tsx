@@ -33,7 +33,9 @@ export default async function AdminOverviewPage() {
     { href: "/admin/shops", title: "Shop Registry", subtitle: "Add, edit, verify, and remove laundry shops." },
     { href: "/admin/users", title: "User Governance", subtitle: "Manage account roles and suspension status." },
     { href: "/admin/vouchers", title: "Promo Vault", subtitle: "Control discount campaigns and voucher lifecycle." },
+    { href: "/admin/offers", title: "Home Offers", subtitle: "Manage home-page promo cards and publishing windows." },
     { href: "/admin/orders", title: "Order Audit", subtitle: "Track status and payment state of all orders." },
+    { href: "/admin/support", title: "Support Queue", subtitle: "Review and resolve customer support tickets." },
   ];
 
   return (
