@@ -51,6 +51,22 @@ export async function getVerifiedShops(search?: string) {
   return data;
 }
 
+export async function getShopRecentReviewerAvatars(shopId: string, limit: number = 3): Promise<Array<{ avatar_key: string; reviewed_at: string }>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_shop_recent_reviewer_avatars", {
+    p_shop_id: shopId,
+    p_limit: limit,
+  });
+
+  if (error) {
+    // Gracefully return empty array if RPC fails (reviews may not exist yet).
+    console.warn(`Failed to fetch recent avatars for shop ${shopId}:`, error.message);
+    return [];
+  }
+
+  return (data as Array<{ avatar_key: string; reviewed_at: string }>) ?? [];
+}
+
 export async function getVerifiedShopsWithServices(
   search?: string,
   options?: { shopId?: string; limit?: number },

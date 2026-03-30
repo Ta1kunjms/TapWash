@@ -279,67 +279,72 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
           return (
             <article
               key={shop.id}
-              className="grid grid-cols-[5.5rem_1fr_auto] gap-3 rounded-[1.35rem] border border-border-muted bg-white p-2 shadow-soft"
+              className="flex flex-col md:grid md:grid-cols-[6.5rem_1fr_auto] gap-3 md:gap-4 rounded-[1.35rem] border border-border-muted bg-white p-3 md:p-3 transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.12)] shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:border-border-muted/50"
             >
               <Link
                 href={`/customer/shops/${shop.id}`}
                 onClick={() => handleOpenDetail(shop)}
-                className="relative h-[5.5rem] w-[5.5rem] overflow-hidden rounded-2xl bg-background-app"
+                className="relative h-[5.5rem] w-[5.5rem] md:h-[6.5rem] md:w-[6.5rem] overflow-hidden rounded-2xl md:rounded-[1.25rem] bg-background-app flex-shrink-0 transition-transform duration-200 hover:scale-105"
               >
                 <Image
                   src={shop.cover_image_url?.trim() || "/tapwash-logo.png"}
                   alt={`${shop.shop_name} preview`}
                   fill
-                  sizes="88px"
+                  sizes="(max-width: 768px) 88px, 104px"
                   className="object-cover"
                 />
               </Link>
 
-              <div className="min-w-0">
-                <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex flex-col justify-between flex-grow">
+                {/* Header: Name + Status */}
+                <div className="flex items-start justify-between gap-2 mb-1">
                   <Link
                     href={`/customer/shops/${shop.id}`}
                     onClick={() => handleOpenDetail(shop)}
-                    className="line-clamp-1 text-base font-bold text-text-secondary"
+                    className="line-clamp-1 text-base font-bold text-text-secondary hover:text-primary-500 transition-colors"
                   >
                     {shop.shop_name}
                   </Link>
                   <span className={statusBadgeClass(shop.status)}>{shop.status_label}</span>
                 </div>
-                <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">
-                  {shop.description?.trim() || shop.location || "Quality laundry care with doorstep pickup."}
+
+                {/* Description */}
+                <p className="line-clamp-1 text-xs text-text-muted mb-2">
+                  {shop.description?.trim() || shop.location || "Quality laundry care"}
                 </p>
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  {shop.trust_badges.slice(0, 2).map((badge) => (
-                    <span key={`${shop.id}-${badge}`} className="rounded-full bg-background-app px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
-                      {badge}
-                    </span>
-                  ))}
-                  {shop.promo_badge ? (
-                    <span className="rounded-full bg-[#fff4dd] px-2 py-0.5 text-[10px] font-semibold text-[#b97200]">
-                      {shop.promo_badge}
+
+                {/* Meta Row: Rating | Distance | Social Proof */}
+                <div className="flex items-center gap-2 text-[10px] text-text-muted mb-2">
+                  <span className="flex items-center gap-0.5">⭐ {(shop.rating_avg ?? 0).toFixed(1)} <span className="text-[9px]">({shop.total_reviews ?? 0})</span></span>
+                  <span>•</span>
+                  <span>{shop.distance_km !== null ? `${shop.distance_km} km` : "⊘"}</span>
+                </div>
+
+                {/* Social Proof & Badges Row */}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <p className="text-[10px] font-medium text-primary-500/70">{shop.social_proof}</p>
+                  {getDisplayBadge(shop.trust_badges, shop.promo_badge) ? (
+                    <span className={getDisplayBadgeClass(shop.trust_badges, shop.promo_badge)}>
+                      {getDisplayBadgeText(shop.trust_badges, shop.promo_badge)}
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-1.5 flex items-center gap-2 text-[11px] text-text-muted">
-                  <span>⭐ {(shop.rating_avg ?? 0).toFixed(1)} ({shop.total_reviews ?? 0})</span>
-                  <span>{shop.distance_km !== null ? `${shop.distance_km} km` : "Distance n/a"}</span>
-                </div>
-                <p className="mt-1 text-[11px] font-medium text-primary-500">{shop.social_proof}</p>
-                <p className="text-[1.05rem] font-black text-primary-500">P{shop.starting_price.toFixed(2)}</p>
+
+                {/* Price */}
+                <p className="text-[1.1rem] font-black text-primary-500">₱{shop.starting_price.toFixed(2)}</p>
               </div>
 
-              <div className="flex flex-col items-end justify-between gap-2">
+              <div className="flex flex-row md:flex-col items-center md:items-end justify-end md:justify-between gap-2 mt-2 md:mt-0">
                 <FavoriteToggleButton
                   shopId={shop.id}
                   initialIsFavorite={favoriteShopIds.includes(shop.id)}
                   variant="icon"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-primary-500/15 bg-primary-500/10 text-primary-500"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-primary-500/20 bg-primary-500/10 text-primary-500 transition-all duration-150 hover:bg-primary-500/20 hover:border-primary-500/40 active:scale-95"
                 />
                 <Link
                   href={`/customer/shops/${shop.id}`}
                   onClick={() => handleOpenDetail(shop)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-500 text-white"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-500 text-white transition-all duration-150 hover:shadow-[0_4px_12px_rgba(59,130,246,0.4)] active:scale-95"
                   aria-label={`View ${shop.shop_name}`}
                 >
                   <FlaticonIcon name="shopping-basket" className="text-lg" ariaHidden={false} />
@@ -368,6 +373,28 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
   );
 }
 
+function getDisplayBadge(trustBadges: string[], promoBadge: string | null): boolean {
+  return trustBadges.length > 0 || promoBadge !== null;
+}
+
+function getDisplayBadgeText(trustBadges: string[], promoBadge: string | null): string {
+  if (trustBadges.includes("Verified")) return "Verified";
+  if (trustBadges.length > 0) return trustBadges[0];
+  if (promoBadge) return promoBadge;
+  return "";
+}
+
+function getDisplayBadgeClass(trustBadges: string[], promoBadge: string | null): string {
+  const text = getDisplayBadgeText(trustBadges, promoBadge);
+  if (text === "Verified" || trustBadges.includes(text)) {
+    return "rounded-full bg-background-app px-2 py-0.5 text-[10px] font-semibold text-text-secondary";
+  }
+  if (text === promoBadge) {
+    return "rounded-full bg-[#fff4dd] px-2 py-0.5 text-[10px] font-semibold text-[#b97200]";
+  }
+  return "rounded-full bg-background-app px-2 py-0.5 text-[10px] font-semibold text-text-secondary";
+}
+
 function parseSort(value: string | null, fallback: SortMode): SortMode {
   if (!value) return fallback;
   const found = SORT_OPTIONS.find((option) => option.value === value);
@@ -383,15 +410,15 @@ function statusBadgeClass(status: FeedItem["status"]): string {
 
 function FeedSkeletonCard() {
   return (
-    <div className="grid grid-cols-[5.5rem_1fr_auto] gap-3 rounded-[1.35rem] border border-border-muted bg-white p-2 shadow-soft">
-      <div className="h-[5.5rem] w-[5.5rem] animate-pulse rounded-2xl bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
-      <div className="space-y-2">
+    <div className="flex flex-col md:grid md:grid-cols-[6.5rem_1fr_auto] gap-3 md:gap-4 rounded-[1.35rem] border border-border-muted bg-white p-3 md:p-3 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+      <div className="h-[5.5rem] w-[5.5rem] md:h-[6.5rem] md:w-[6.5rem] animate-pulse rounded-2xl md:rounded-[1.25rem] bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 flex-shrink-0" />
+      <div className="space-y-3 flex flex-col flex-grow">
         <div className="h-4 w-4/5 animate-pulse rounded bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
         <div className="h-3 w-full animate-pulse rounded bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
-        <div className="h-3 w-11/12 animate-pulse rounded bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
-        <div className="h-5 w-20 animate-pulse rounded bg-gradient-to-r from-blue-100 via-blue-50 to-blue-100" />
+        <div className="h-3 w-3/4 animate-pulse rounded bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
+        <div className="h-5 w-24 animate-pulse rounded bg-gradient-to-r from-blue-100 via-blue-50 to-blue-100" />
       </div>
-      <div className="flex flex-col justify-between">
+      <div className="flex flex-row md:flex-col items-center md:items-end justify-end md:justify-between gap-2 mt-2 md:mt-0">
         <div className="h-8 w-8 animate-pulse rounded-full bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
         <div className="h-8 w-8 animate-pulse rounded-full bg-gradient-to-r from-blue-100 via-blue-50 to-blue-100" />
       </div>
