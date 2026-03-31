@@ -191,6 +191,9 @@ export function BookingForm({
           <label htmlFor="user-weight-input" className="block text-sm font-bold text-[#217ebf] mb-1">
             Enter laundry weight (kg)
           </label>
+          <p className="mb-1 text-xs font-semibold text-[#6ba5cb]">
+            Shop machine capacity: about {Number(selectedShop?.load_capacity_kg ?? 8).toFixed(0)} kg per load
+          </p>
           <input
             id="user-weight-input"
             type="number"
@@ -202,12 +205,10 @@ export function BookingForm({
             value={userWeight}
             onChange={(e) => setUserWeight(e.target.value)}
           />
-          <p className="mt-1 text-xs text-[#8bb8d6]">This will be used to estimate your total price and loads.</p>
+          <p className="mt-1 text-xs text-[#8bb8d6]">Used for a more accurate subtotal preview before checkout, based on the shop capacity above.</p>
         </div>
         <div className="space-y-1">
           {services.map((service, index) => {
-
-            const visual = getServiceVisual(service.name);
             const isSelected = service.id === selectedServiceId;
             const displayLoads = serviceLoads[service.id] ?? 0;
             const displayPrice = service.unit_price * displayLoads;
@@ -220,11 +221,8 @@ export function BookingForm({
                     onClick={() => {
                       setActiveServiceId(service.id);
                     }}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    className="flex min-w-0 flex-1 items-center text-left"
                   >
-                    <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[0.72rem] font-black", visual.iconClass)}>
-                      {visual.badge}
-                    </span>
                     <span className={cn("text-[1rem] font-bold leading-tight text-[#1d8bd3]", isSelected && "text-[#137cc1]")}>{service.name}</span>
                   </button>
 
@@ -398,10 +396,15 @@ export function BookingForm({
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <p className="text-[0.74rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Selection</p>
-            <h2 className="mt-1 text-[0.98rem] font-black text-[#2f8ecf]">Review your bucket</h2>
+            <h2 className="mt-1 text-[0.98rem] font-black text-[#2f8ecf]">Review your booking bucket</h2>
           </div>
           <span className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.72rem] font-black text-[#1f8fd6]">{totalLoads} {totalLoads === 1 ? "load" : "loads"}</span>
         </div>
+
+        <p className="mb-3 inline-flex items-center gap-1 rounded-full bg-[#edf7ff] px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-[#1f8fd6]">
+          <FlaticonIcon name="badge-check" className="text-[0.72rem]" />
+          Final total confirmed at checkout
+        </p>
 
         {selectedServiceSummaries.length > 0 ? (
           <div className="space-y-2.5">
@@ -465,7 +468,7 @@ export function BookingForm({
               !canCheckout && "pointer-events-none opacity-70",
             )}
           >
-            Checkout
+            Continue to checkout
           </Link>
         </div>
       </div>
@@ -612,41 +615,4 @@ function getQuickPickDescription(name: string, loads: number) {
   }
 
   return `${loads} wash-ready load${loads === 1 ? "" : "s"}`;
-}
-
-function getServiceVisual(name: string) {
-  const normalizedName = name.toLowerCase();
-
-  if (normalizedName.includes("wash")) {
-    return { badge: "WA", iconClass: "bg-[#dff1ff] text-[#0081c9] ring-[#a9d8fb]" };
-  }
-
-  if (normalizedName.includes("dry")) {
-    return { badge: "DR", iconClass: "bg-[#e6f7f0] text-[#1aa37a] ring-[#b7ead9]" };
-  }
-
-  if (normalizedName.includes("fold")) {
-    return { badge: "FO", iconClass: "bg-[#f6efff] text-[#7756d8] ring-[#d9ccff]" };
-  }
-
-  if (normalizedName.includes("iron")) {
-    return { badge: "IR", iconClass: "bg-[#fff1e5] text-[#ec7a26] ring-[#ffd6b0]" };
-  }
-
-  if (normalizedName.includes("stain")) {
-    return { badge: "SR", iconClass: "bg-[#ffe7eb] text-[#d34c71] ring-[#ffc7d4]" };
-  }
-
-  if (normalizedName.includes("clean")) {
-    return { badge: "DC", iconClass: "bg-[#ebf4ff] text-[#376cd9] ring-[#c5dafd]" };
-  }
-
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("") || "SV";
-
-  return { badge: initials, iconClass: "bg-[#dff1ff] text-[#0081c9] ring-[#a9d8fb]" };
 }

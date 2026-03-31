@@ -279,7 +279,7 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
           return (
             <article
               key={shop.id}
-              className="flex flex-col md:grid md:grid-cols-[6.5rem_1fr_auto] gap-3 md:gap-4 rounded-[1.35rem] border border-border-muted bg-white p-3 md:p-3 transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.12)] shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:border-border-muted/50"
+              className="grid grid-cols-[5.5rem_1fr_auto] md:grid-cols-[6.5rem_1fr_auto] items-start gap-3 md:gap-4 rounded-[1.35rem] border border-border-muted bg-white p-3 transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.12)] shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:border-border-muted/50"
             >
               <Link
                 href={`/customer/shops/${shop.id}`}
@@ -295,7 +295,7 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
                 />
               </Link>
 
-              <div className="min-w-0 flex flex-col justify-between flex-grow">
+              <div className="min-w-0 flex flex-col justify-between">
                 {/* Header: Name + Status */}
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <Link
@@ -321,7 +321,7 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
                 </div>
 
                 {/* Social Proof & Badges Row */}
-                <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
                   <p className="text-[10px] font-medium text-primary-500/70">{shop.social_proof}</p>
                   {getDisplayBadge(shop.trust_badges, shop.promo_badge) ? (
                     <span className={getDisplayBadgeClass(shop.trust_badges, shop.promo_badge)}>
@@ -334,7 +334,7 @@ export function HomeLaundromatFeed({ initialQuery, userLat, userLng, favoriteSho
                 <p className="text-[1.1rem] font-black text-primary-500">₱{shop.starting_price.toFixed(2)}</p>
               </div>
 
-              <div className="flex flex-row md:flex-col items-center md:items-end justify-end md:justify-between gap-2 mt-2 md:mt-0">
+              <div className="flex flex-col items-end justify-between self-stretch gap-2">
                 <FavoriteToggleButton
                   shopId={shop.id}
                   initialIsFavorite={favoriteShopIds.includes(shop.id)}
@@ -410,15 +410,15 @@ function statusBadgeClass(status: FeedItem["status"]): string {
 
 function FeedSkeletonCard() {
   return (
-    <div className="flex flex-col md:grid md:grid-cols-[6.5rem_1fr_auto] gap-3 md:gap-4 rounded-[1.35rem] border border-border-muted bg-white p-3 md:p-3 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+    <div className="grid grid-cols-[5.5rem_1fr_auto] md:grid-cols-[6.5rem_1fr_auto] items-start gap-3 md:gap-4 rounded-[1.35rem] border border-border-muted bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
       <div className="h-[5.5rem] w-[5.5rem] md:h-[6.5rem] md:w-[6.5rem] animate-pulse rounded-2xl md:rounded-[1.25rem] bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 flex-shrink-0" />
-      <div className="space-y-3 flex flex-col flex-grow">
+      <div className="space-y-3 flex flex-col">
         <div className="h-4 w-4/5 animate-pulse rounded bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
         <div className="h-3 w-full animate-pulse rounded bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
         <div className="h-3 w-3/4 animate-pulse rounded bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
         <div className="h-5 w-24 animate-pulse rounded bg-gradient-to-r from-blue-100 via-blue-50 to-blue-100" />
       </div>
-      <div className="flex flex-row md:flex-col items-center md:items-end justify-end md:justify-between gap-2 mt-2 md:mt-0">
+      <div className="flex flex-col items-end justify-between self-stretch gap-2">
         <div className="h-8 w-8 animate-pulse rounded-full bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100" />
         <div className="h-8 w-8 animate-pulse rounded-full bg-gradient-to-r from-blue-100 via-blue-50 to-blue-100" />
       </div>

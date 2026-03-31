@@ -5,7 +5,7 @@ import { listCustomerAddresses, getSelectedCustomerAddress } from "@/services/ad
 import { getCurrentUserRole } from "@/services/auth";
 import { getVerifiedShopsWithServices } from "@/services/shops";
 import { redirect } from "next/navigation";
-import { getCustomerProfile, getDefaultCustomerPaymentMethod } from "@/services/customer";
+import { getCustomerProfile, getDefaultCustomerPaymentMethod, listCustomerPaymentPreferences } from "@/services/customer";
 
 type CheckoutBucketSelection = {
   serviceId: string;
@@ -23,11 +23,12 @@ export default async function CheckoutPage({
   if (role !== "customer") redirect(roleToPath(role));
 
   const { q, shopId, serviceId, weight, promoCode, error, errorDetail, bucket } = await searchParams;
-  const [selectedAddress, savedAddresses, profile, defaultPaymentMethod] = await Promise.all([
+  const [selectedAddress, savedAddresses, profile, defaultPaymentMethod, paymentPreferences] = await Promise.all([
     getSelectedCustomerAddress(),
     listCustomerAddresses(),
     getCustomerProfile(),
     getDefaultCustomerPaymentMethod(),
+    listCustomerPaymentPreferences(),
   ]);
   let shops: Awaited<ReturnType<typeof getVerifiedShopsWithServices>> = [];
   let loadError: string | null = null;
@@ -75,6 +76,7 @@ export default async function CheckoutPage({
         initialSavedAddresses={savedAddresses.map((address) => address.address_line)}
         initialContactPhone={profile?.phone || ""}
         initialPaymentMethod={defaultPaymentMethod ?? "cod"}
+        initialPaymentPreferences={paymentPreferences}
       />
     </main>
   );

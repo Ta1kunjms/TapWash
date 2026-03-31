@@ -5,6 +5,11 @@ import type { UserRole } from "@/types/domain";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  const isServerActionRequest = request.method === "POST" && request.headers.has("next-action");
+  if (isServerActionRequest) {
+    return NextResponse.next();
+  }
+
   const { supabase, supabaseResponse } = await updateSession(request);
   const {
     data: { user },

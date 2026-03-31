@@ -95,38 +95,43 @@ export default async function CustomerPaymentPage({
           </div>
         ) : null}
 
-        {preferences.map((preference) => (
-          <article key={preference.id} className="rounded-2xl border border-border-muted bg-white p-3 shadow-soft">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-text-secondary">{formatPaymentMethodLabel(preference.method, locale)}</p>
-                <p className="text-xs text-text-muted">{preference.display_label || dictionary.settings.noLabel}</p>
-                <p className="text-xs text-text-muted">{preference.masked_reference || dictionary.settings.noReference}</p>
-              </div>
-              {preference.is_default ? (
-                <span className="rounded-full bg-primary-500/10 px-2 py-1 text-[11px] font-semibold text-primary-500">{dictionary.settings.defaultBadge}</span>
-              ) : null}
-            </div>
+        {preferences.length > 0 ? (
+          <div className="overflow-hidden rounded-2xl border border-border-muted bg-white shadow-soft">
+            {preferences.map((preference, index) => (
+              <article key={preference.id} className={index > 0 ? "border-t border-border-muted/70 p-3" : "p-3"}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-text-secondary">{formatPaymentMethodLabel(preference.method, locale)}</p>
+                    <p className="truncate text-xs text-text-muted">
+                      {preference.display_label || preference.masked_reference || dictionary.settings.noReference}
+                    </p>
+                  </div>
+                  {preference.is_default ? (
+                    <span className="rounded-full bg-primary-500/10 px-2 py-1 text-[11px] font-semibold text-primary-500">{dictionary.settings.defaultBadge}</span>
+                  ) : null}
+                </div>
 
-            <div className="mt-3 flex gap-2">
-              {!preference.is_default ? (
-                <form action={setDefaultFormAction}>
-                  <input type="hidden" name="preference_id" value={preference.id} />
-                  <button type="submit" className="h-9 rounded-lg border border-border-muted px-3 text-xs font-semibold text-text-secondary">
-                    {dictionary.settings.setDefault}
-                  </button>
-                </form>
-              ) : null}
+                <div className="mt-3 flex gap-2">
+                  {!preference.is_default ? (
+                    <form action={setDefaultFormAction}>
+                      <input type="hidden" name="preference_id" value={preference.id} />
+                      <button type="submit" className="h-9 rounded-lg border border-border-muted px-3 text-xs font-semibold text-text-secondary">
+                        {dictionary.settings.setDefault}
+                      </button>
+                    </form>
+                  ) : null}
 
-              <form action={deletePreferenceFormAction}>
-                <input type="hidden" name="preference_id" value={preference.id} />
-                <button type="submit" className="h-9 rounded-lg border border-rose-200 px-3 text-xs font-semibold text-rose-600">
-                  {dictionary.settings.remove}
-                </button>
-              </form>
-            </div>
-          </article>
-        ))}
+                  <form action={deletePreferenceFormAction}>
+                    <input type="hidden" name="preference_id" value={preference.id} />
+                    <button type="submit" className="h-9 rounded-lg border border-rose-200 px-3 text-xs font-semibold text-rose-600">
+                      {dictionary.settings.remove}
+                    </button>
+                  </form>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {saved === "1" ? (

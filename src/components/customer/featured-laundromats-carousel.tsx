@@ -112,7 +112,7 @@ export function FeaturedLaundromatCarousel({
               key={shop.id}
               className="group min-w-[82%] snap-start overflow-hidden rounded-[1.5rem] border border-border-muted/60 bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,0.14)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(15,23,42,0.18)]"
             >
-              <Link href={`/customer/shop/${shop.id}`} className="block">
+              <Link href={`/customer/shops/${shop.id}`} className="block">
                 <div className="relative overflow-hidden rounded-[1.2rem] bg-background-app">
                   <div className="relative aspect-[16/10] overflow-hidden rounded-[1.05rem]">
                     <Image
@@ -206,7 +206,7 @@ export function FeaturedLaundromatCarousel({
                     ))}
                   </div>
                   <Link
-                    href={`/customer/shop/${shop.id}`}
+                    href={`/customer/shops/${shop.id}`}
                     className="inline-flex shrink-0 items-center rounded-full bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white transition-all duration-150 hover:bg-primary-600 hover:shadow-md active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
                   >
                     View

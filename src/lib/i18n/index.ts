@@ -104,16 +104,36 @@ export type CustomerDictionary = {
   shop: {
     goBack: string;
     share: string;
+    shareCopied: string;
+    shareFailed: string;
     verified: string;
+    trustedByCustomers: string;
     startingFrom: string;
     capacitySuffix: string;
     turnaround24h: string;
+    premiumCare: string;
+    transparentPricing: string;
+    vettedTeam: string;
     about: string;
     aboutFallback: string;
+    jumpTo: string;
     services: string;
     noServices: string;
+    optionGroupsLabel: string;
     careOptions: string;
     popularAddons: string;
+    modernMachines: string;
+    gentleChemicals: string;
+    pickupDeliveryReady: string;
+    recentReviews: string;
+    recentReviewsEmpty: string;
+    faq: string;
+    faqTurnaroundQ: string;
+    faqTurnaroundA: string;
+    faqDelicatesQ: string;
+    faqDelicatesA: string;
+    faqPaymentQ: string;
+    faqPaymentA: string;
     showBucket: string;
   };
 };
@@ -301,17 +321,37 @@ const CUSTOMER_EN: CustomerDictionary = {
   shop: {
     goBack: "Go back",
     share: "Share",
+    shareCopied: "Shop link copied to clipboard.",
+    shareFailed: "Could not share this shop right now.",
     verified: "Verified",
+    trustedByCustomers: "Trusted by recent customers",
     startingFrom: "Starting from",
     capacitySuffix: "kg capacity",
     turnaround24h: "24 hr turnaround",
+    premiumCare: "Premium care",
+    transparentPricing: "Transparent pricing",
+    vettedTeam: "Vetted team",
     about: "About",
     aboutFallback:
       "A trusted laundromat offering reliable wash-dry-fold, express laundry, dry cleaning, and stain treatment. Known for modern equipment, fast turnaround, and excellent service.",
+    jumpTo: "Jump to",
     services: "Services",
     noServices: "No services available yet.",
+    optionGroupsLabel: "option groups",
     careOptions: "Care Options",
     popularAddons: "Popular Add-ons",
+    modernMachines: "Modern machines",
+    gentleChemicals: "Gentle chemicals",
+    pickupDeliveryReady: "Pickup and delivery ready",
+    recentReviews: "Recent Reviews",
+    recentReviewsEmpty: "No recent reviews yet. Be the first customer to share feedback.",
+    faq: "FAQ",
+    faqTurnaroundQ: "How fast can my laundry be completed?",
+    faqTurnaroundA: "Most standard orders are completed within 24 hours depending on load volume and time slot availability.",
+    faqDelicatesQ: "Can I include delicate garments?",
+    faqDelicatesA: "Yes. Delicates can be handled with gentle-cycle or add-on care options from the menu.",
+    faqPaymentQ: "What payment methods are accepted?",
+    faqPaymentA: "You can choose your preferred payment option during checkout before confirming your booking.",
     showBucket: "Show Bucket",
   },
 };
@@ -381,15 +421,35 @@ const CUSTOMER_TL: CustomerDictionary = {
     ...CUSTOMER_EN.shop,
     goBack: "Bumalik",
     share: "I-share",
+    shareCopied: "Nakopya ang link ng shop.",
+    shareFailed: "Hindi maibahagi ang shop sa ngayon.",
     verified: "Verified",
+    trustedByCustomers: "Pinagkakatiwalaan ng mga kamakailang customer",
     startingFrom: "Mula sa",
     capacitySuffix: "kg kapasidad",
     turnaround24h: "24 oras na turnaround",
+    premiumCare: "Premium care",
+    transparentPricing: "Malinaw na presyo",
+    vettedTeam: "Suring team",
     about: "Tungkol",
+    jumpTo: "Pumunta sa",
     services: "Mga Serbisyo",
     noServices: "Wala pang available na serbisyo.",
+    optionGroupsLabel: "option groups",
     careOptions: "Mga Care Option",
     popularAddons: "Mga Sikat na Add-on",
+    modernMachines: "Makabagong makina",
+    gentleChemicals: "Banayad na kemikal",
+    pickupDeliveryReady: "Handa para sa pickup at delivery",
+    recentReviews: "Mga Kamakailang Review",
+    recentReviewsEmpty: "Wala pang kamakailang review. Ikaw ang unang magbigay ng feedback.",
+    faq: "FAQ",
+    faqTurnaroundQ: "Gaano kabilis matatapos ang labada ko?",
+    faqTurnaroundA: "Karamihan ng karaniwang order ay natatapos sa loob ng 24 oras depende sa dami at available na slot.",
+    faqDelicatesQ: "Pwede bang isama ang delicate na damit?",
+    faqDelicatesA: "Oo. Pwedeng i-handle ang delicates gamit ang gentle-cycle o add-on care options sa menu.",
+    faqPaymentQ: "Anong mga paraan ng bayad ang tinatanggap?",
+    faqPaymentA: "Maaari mong piliin ang gusto mong payment option sa checkout bago i-confirm ang booking.",
     showBucket: "Ipakita ang Bucket",
   },
 };

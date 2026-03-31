@@ -26,8 +26,6 @@ export function CheckoutMapPreviewSection({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Map preview</p>
-          <h2 className="mt-1 text-[1rem] font-black text-[#2f5878]">Customer and laundromat distance</h2>
-          <p className="mt-1 text-[0.78rem] font-semibold text-[#6d90aa]">Distance is measured from pickup address to {shopName}.</p>
         </div>
         <span className="shrink-0 rounded-full bg-[#eaf5ff] px-3 py-1 text-[0.72rem] font-black text-[#1f8fd6]">
           {roadDistanceKm !== null ? `${roadDistanceKm.toFixed(1)} km` : "Pending"}

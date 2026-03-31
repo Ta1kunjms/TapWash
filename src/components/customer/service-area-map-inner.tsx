@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import L from "leaflet";
-import { CircleMarker, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 import { useRouter } from "next/navigation";
 
 type ServiceMapShop = {
@@ -54,6 +54,17 @@ export function ServiceAreaMapInner({ shops, userLocation }: Props) {
     [],
   );
 
+  const userLocationMarkerIcon = useMemo(
+    () =>
+      L.icon({
+        iconUrl: "/pingu/Location%20Tag.png",
+        iconSize: [34, 34],
+        iconAnchor: [17, 34],
+        popupAnchor: [0, -28],
+      }),
+    [],
+  );
+
   const center = useMemo<[number, number]>(() => {
     if (userLocation) {
       return [userLocation.lat, userLocation.lng];
@@ -95,13 +106,7 @@ export function ServiceAreaMapInner({ shops, userLocation }: Props) {
           />
         ))}
 
-        {userLocation ? (
-          <CircleMarker
-            center={[userLocation.lat, userLocation.lng]}
-            radius={7}
-            pathOptions={{ color: "#1d8f57", fillColor: "#22c55e", fillOpacity: 1, weight: 2 }}
-          />
-        ) : null}
+        {userLocation ? <Marker position={[userLocation.lat, userLocation.lng]} icon={userLocationMarkerIcon} /> : null}
       </MapContainer>
     </div>
   );

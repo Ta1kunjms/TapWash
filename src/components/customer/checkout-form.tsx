@@ -1,6 +1,5 @@
 "use client";
 
-import { createOrderAction } from "@/app/actions/orders";
 import { AddressAutocomplete } from "@/components/customer/address-autocomplete";
 import { CheckoutMapPreviewSection } from "@/components/customer/checkout-map-preview-section";
 import { CheckoutPaymentSection } from "@/components/customer/checkout-payment-section";
@@ -17,10 +16,11 @@ import {
   type PricingService,
 } from "@/lib/pricing";
 import { Input } from "@/components/ui/input";
+import type { CustomerPaymentPreference } from "@/types/domain";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 type PaymentMethod = "cod" | "gcash" | "card";
 type VoucherStatus = "idle" | "applied" | "invalid" | "error";
@@ -54,6 +54,7 @@ export type CheckoutFormProps = {
   initialSavedAddresses?: string[];
   initialContactPhone?: string;
   initialPaymentMethod?: PaymentMethod;
+  initialPaymentPreferences?: CustomerPaymentPreference[];
 };
 
 type CheckoutBucketSelection = {
@@ -85,7 +86,9 @@ export function CheckoutForm({
   initialSavedAddresses,
   initialContactPhone,
   initialPaymentMethod,
+  initialPaymentPreferences = [],
 }: CheckoutFormProps) {
+  const router = useRouter();
   const selectedShop = useMemo(
     () => shops.find((shop) => shop.id === initialShopId) ?? shops[0],
     [initialShopId, shops],
@@ -153,9 +156,11 @@ export function CheckoutForm({
   const [showManualAddressFields, setShowManualAddressFields] = useState(
     () => !initialSelectedAddress && (initialSavedAddresses?.length ?? 0) === 0,
   );
+  const [useSameDropoff, setUseSameDropoff] = useState<boolean>(
+    () => initialDraft?.useSameDropoff ?? true,
+  );
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
-  const [showAdditionalInstructions, setShowAdditionalInstructions] = useState(false);
-  const [showTipOptions, setShowTipOptions] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState<"pickup" | "delivery" | null>("pickup");
   const [promoDiscount, setPromoDiscount] = useState<number>(0);
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(() => {
     const fromDraft = initialDraft?.promoCode?.trim().toUpperCase();
@@ -165,6 +170,7 @@ export function CheckoutForm({
   const [isApplyingVoucher, setIsApplyingVoucher] = useState(false);
   const [voucherStatus, setVoucherStatus] = useState<VoucherStatus>("idle");
   const [voucherMessage, setVoucherMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const selectableAddresses = useMemo(
     () => uniqueAddresses([pickupAddress, dropoffAddress, ...savedAddresses]),
     [dropoffAddress, pickupAddress, savedAddresses],
@@ -242,6 +248,12 @@ export function CheckoutForm({
   const totalWeight = Number(bucketEstimates.reduce((sum, entry) => sum + entry.weightKg, 0).toFixed(1));
   const totalBeforeDiscount = Number((subtotal + deliveryFee + tipAmount).toFixed(2));
   const total = Number(Math.max(0, totalBeforeDiscount - promoDiscount).toFixed(2));
+  const effectiveScheduleMode = scheduleMode ?? "pickup";
+  const scheduleDateTime = effectiveScheduleMode === "pickup" ? pickupDate : deliveryDate;
+  const scheduleDateValue = extractDatePart(scheduleDateTime) || getTodayDate();
+  const scheduleTimeValue = extractTimePart(scheduleDateTime) || (effectiveScheduleMode === "pickup" ? "08:00" : "09:00");
+  const scheduleMinimumDateTime =
+    effectiveScheduleMode === "pickup" ? toLocalDateTimeInputValue(new Date()) : pickupDate;
   const isCheckoutReady = Boolean(
     selectedShop?.id &&
       bucketEstimates.length > 0 &&
@@ -252,6 +264,70 @@ export function CheckoutForm({
       deliveryDate &&
       hasRouteQuote,
   );
+
+  const handleSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!isCheckoutReady || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const formData = new FormData(event.currentTarget);
+      const response = await fetch("/api/orders/checkout", {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = await response.json() as { redirectTo?: string };
+
+      if (payload.redirectTo) {
+        router.push(payload.redirectTo);
+        router.refresh();
+        return;
+      }
+
+      router.push("/customer/orders/checkout?error=Unable+to+create+booking.+Please+review+your+details+and+try+again.");
+      router.refresh();
+    } catch {
+      router.push("/customer/orders/checkout?error=Unable+to+create+booking.+Please+review+your+details+and+try+again.");
+      router.refresh();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [isCheckoutReady, isSubmitting, router]);
+
+  const handleScheduleDateChange = useCallback((nextDate: string) => {
+    const mode = scheduleMode ?? "pickup";
+
+    if (mode === "pickup") {
+      const fallbackTime = extractTimePart(pickupDate) || "08:00";
+      const nextPickupDate = composeDateTime(nextDate, fallbackTime);
+      setPickupDate(nextPickupDate);
+      setDeliveryDate((currentDelivery) => ensureDeliveryAfterPickup(nextPickupDate, currentDelivery));
+      return;
+    }
+
+    const fallbackTime = extractTimePart(deliveryDate) || "09:00";
+    setDeliveryDate(ensureDeliveryAfterPickup(pickupDate, composeDateTime(nextDate, fallbackTime)));
+  }, [deliveryDate, pickupDate, scheduleMode]);
+
+  const handleScheduleTimeChange = useCallback((nextTime: string) => {
+    const mode = scheduleMode ?? "pickup";
+
+    if (mode === "pickup") {
+      const fallbackDate = extractDatePart(pickupDate) || getTodayDate();
+      const nextPickupDate = composeDateTime(fallbackDate, nextTime);
+      setPickupDate(nextPickupDate);
+      setDeliveryDate((currentDelivery) => ensureDeliveryAfterPickup(nextPickupDate, currentDelivery));
+      return;
+    }
+
+    const fallbackDate = extractDatePart(deliveryDate) || getTodayDate();
+    setDeliveryDate(ensureDeliveryAfterPickup(pickupDate, composeDateTime(fallbackDate, nextTime)));
+  }, [deliveryDate, pickupDate, scheduleMode]);
 
   const estimateVoucher = useCallback(async (code: string) => {
     const response = await fetch("/api/vouchers/estimate", {
@@ -523,6 +599,15 @@ export function CheckoutForm({
   ]);
 
   useEffect(() => {
+    if (!useSameDropoff) return;
+
+    setDropoffAddress(pickupAddress);
+    setDropoffLat(pickupLat);
+    setDropoffLng(pickupLng);
+    setDropoffAddressValid(pickupAddressValid);
+  }, [pickupAddress, pickupAddressValid, pickupLat, pickupLng, useSameDropoff]);
+
+  useEffect(() => {
     if (!selectedShop?.id || !selectedService?.id || typeof window === "undefined") return;
 
     window.localStorage.setItem(
@@ -541,6 +626,7 @@ export function CheckoutForm({
         riderNotes,
         tipAmount,
         customTip,
+        useSameDropoff,
       }),
     );
   }, [
@@ -558,6 +644,7 @@ export function CheckoutForm({
     selectedService?.id,
     selectedShop?.id,
     tipAmount,
+    useSameDropoff,
   ]);
 
   useEffect(() => {
@@ -572,11 +659,15 @@ export function CheckoutForm({
 
       if (custom.detail?.cleared) {
         setPickupAddress("");
-        setDropoffAddress("");
+        if (useSameDropoff) {
+          setDropoffAddress("");
+        }
         setPickupLat(null);
         setPickupLng(null);
-        setDropoffLat(null);
-        setDropoffLng(null);
+        if (useSameDropoff) {
+          setDropoffLat(null);
+          setDropoffLng(null);
+        }
         return;
       }
 
@@ -584,23 +675,31 @@ export function CheckoutForm({
       if (!nextAddress) return;
 
       setPickupAddress(nextAddress);
-      setDropoffAddress(nextAddress);
+      if (useSameDropoff) {
+        setDropoffAddress(nextAddress);
+      }
       setPickupAddressValid(nextAddress.length >= 5);
-      setDropoffAddressValid(nextAddress.length >= 5);
+      if (useSameDropoff) {
+        setDropoffAddressValid(nextAddress.length >= 5);
+      }
 
       if (typeof custom.detail?.lat === "number" && typeof custom.detail?.lng === "number") {
         setPickupLat(custom.detail.lat);
         setPickupLng(custom.detail.lng);
-        setDropoffLat(custom.detail.lat);
-        setDropoffLng(custom.detail.lng);
+        if (useSameDropoff) {
+          setDropoffLat(custom.detail.lat);
+          setDropoffLng(custom.detail.lng);
+        }
         setPickupAddressValid(true);
-        setDropoffAddressValid(true);
+        if (useSameDropoff) {
+          setDropoffAddressValid(true);
+        }
       }
     };
 
     window.addEventListener("tapwash:location-updated", onLocationUpdated as EventListener);
     return () => window.removeEventListener("tapwash:location-updated", onLocationUpdated as EventListener);
-  }, []);
+  }, [useSameDropoff]);
 
   if (!selectedShop || bucketEstimates.length === 0 || !selectedService) {
     return (
@@ -614,7 +713,7 @@ export function CheckoutForm({
   }
 
   return (
-    <form action={createOrderAction} className="space-y-3 pb-44">
+    <form onSubmit={handleSubmit} className="space-y-3 pb-44">
       <section className="-mx-4 rounded-b-[2rem] bg-[linear-gradient(180deg,#ddecfb_0%,#cce4fa_100%)] px-4 pb-5 pt-3 shadow-[0_12px_28px_rgba(90,140,184,0.18)]">
         <div className="relative flex items-center justify-center">
           <Link
@@ -662,52 +761,97 @@ export function CheckoutForm({
 
       <section className="rounded-[1.2rem] border border-[#cfe3f2] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
         <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Schedule</p>
-        <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Pickup and delivery schedule</h2>
 
         <div className="mt-3 space-y-3">
-          <div className="rounded-[1rem] border border-[#d8e8f4] bg-[#f9fcff] p-3">
-            <p className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#5d8cb0]">Pickup</p>
-            <DateChipPicker
-              value={extractDatePart(pickupDate)}
-              onChange={(nextDate) => {
-                const fallbackTime = extractTimePart(pickupDate) || "08:00";
-                const nextPickupDate = composeDateTime(nextDate, fallbackTime);
-                setPickupDate(nextPickupDate);
-                setDeliveryDate((currentDelivery) => ensureDeliveryAfterPickup(nextPickupDate, currentDelivery));
-              }}
+          <button
+            type="button"
+            onClick={() => setScheduleMode((current) => (current === "pickup" ? null : "pickup"))}
+            className={cn(
+              "flex w-full items-center justify-between rounded-[0.95rem] px-4 py-2.5 text-left transition",
+              scheduleMode === "pickup"
+                ? "bg-[#2f8ecf] text-white shadow-[0_8px_20px_rgba(33,126,191,0.26)]"
+                : "border border-[#cfe3f2] bg-[#f7fbff] text-[#2f5878] hover:border-[#9fcae8]",
+            )}
+          >
+            <span className="text-[1.05rem] font-black">Pickup: {formatScheduleDateTime(pickupDate)}</span>
+            <FlaticonIcon
+              name="angle-small-down"
+              className={cn("text-lg transition-transform", scheduleMode === "pickup" ? "rotate-180" : "")}
             />
-            <TimeSlotPicker
-              dateValue={extractDatePart(pickupDate)}
-              value={extractTimePart(pickupDate)}
-              minimumDateTime={toLocalDateTimeInputValue(new Date())}
-              onChange={(nextTime) => {
-                const fallbackDate = extractDatePart(pickupDate) || getTodayDate();
-                const nextPickupDate = composeDateTime(fallbackDate, nextTime);
-                setPickupDate(nextPickupDate);
-                setDeliveryDate((currentDelivery) => ensureDeliveryAfterPickup(nextPickupDate, currentDelivery));
-              }}
-            />
-          </div>
+          </button>
 
-          <div className="rounded-[1rem] border border-[#d8e8f4] bg-[#f9fcff] p-3">
-            <p className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#5d8cb0]">Delivery</p>
-            <DateChipPicker
-              value={extractDatePart(deliveryDate)}
-              onChange={(nextDate) => {
-                const fallbackTime = extractTimePart(deliveryDate) || "09:00";
-                setDeliveryDate(ensureDeliveryAfterPickup(pickupDate, composeDateTime(nextDate, fallbackTime)));
-              }}
+          {scheduleMode === "pickup" ? (
+            <>
+              <div className="rounded-[1.2rem] border border-[#cfe3f2] bg-[#f8fcff] p-3">
+                <ScheduleCalendarPanel
+                  key={`${scheduleMode}-${scheduleDateValue}`}
+                  value={scheduleDateValue}
+                  minimumDateTime={scheduleMinimumDateTime}
+                  onChange={handleScheduleDateChange}
+                />
+              </div>
+
+              <div className="rounded-[1.2rem] border border-[#cfe3f2] bg-white p-3">
+                <p className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#5d8cb0]">Time</p>
+                <p className="mt-1 text-[0.8rem] font-semibold text-[#6d90aa]">Choose a time slot for the selected date.</p>
+                <ScheduleTimePanel
+                  dateValue={scheduleDateValue}
+                  value={scheduleTimeValue}
+                  minimumDateTime={scheduleMinimumDateTime}
+                  onChange={handleScheduleTimeChange}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setScheduleMode("delivery")}
+                className="w-full rounded-[0.95rem] border border-[#b9d7ec] bg-[#edf7ff] px-4 py-2 text-[0.82rem] font-black text-[#2f8ecf]"
+              >
+                Done with pickup, continue to delivery
+              </button>
+            </>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => setScheduleMode((current) => (current === "delivery" ? null : "delivery"))}
+            className={cn(
+              "flex w-full items-center justify-between rounded-[0.95rem] px-4 py-2.5 text-left transition",
+              scheduleMode === "delivery"
+                ? "bg-[#2f8ecf] text-white shadow-[0_8px_20px_rgba(33,126,191,0.26)]"
+                : "border border-[#cfe3f2] bg-[#f7fbff] text-[#2f5878] hover:border-[#9fcae8]",
+            )}
+          >
+            <span className="text-[1.05rem] font-black">Delivery: {formatScheduleDateTime(deliveryDate)}</span>
+            <FlaticonIcon
+              name="angle-small-down"
+              className={cn("text-lg transition-transform", scheduleMode === "delivery" ? "rotate-180" : "")}
             />
-            <TimeSlotPicker
-              dateValue={extractDatePart(deliveryDate)}
-              value={extractTimePart(deliveryDate)}
-              minimumDateTime={pickupDate}
-              onChange={(nextTime) => {
-                const fallbackDate = extractDatePart(deliveryDate) || getTodayDate();
-                setDeliveryDate(ensureDeliveryAfterPickup(pickupDate, composeDateTime(fallbackDate, nextTime)));
-              }}
-            />
-          </div>
+          </button>
+
+          {scheduleMode === "delivery" ? (
+            <>
+              <div className="rounded-[1.2rem] border border-[#cfe3f2] bg-[#f8fcff] p-3">
+                <ScheduleCalendarPanel
+                  key={`${scheduleMode}-${scheduleDateValue}`}
+                  value={scheduleDateValue}
+                  minimumDateTime={scheduleMinimumDateTime}
+                  onChange={handleScheduleDateChange}
+                />
+              </div>
+
+              <div className="rounded-[1.2rem] border border-[#cfe3f2] bg-white p-3">
+                <p className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#5d8cb0]">Time</p>
+                <p className="mt-1 text-[0.8rem] font-semibold text-[#6d90aa]">Choose a time slot for the selected date.</p>
+                <ScheduleTimePanel
+                  dateValue={scheduleDateValue}
+                  value={scheduleTimeValue}
+                  minimumDateTime={scheduleMinimumDateTime}
+                  onChange={handleScheduleTimeChange}
+                />
+              </div>
+            </>
+          ) : null}
         </div>
       </section>
 
@@ -715,7 +859,6 @@ export function CheckoutForm({
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Location</p>
-            <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Location details</h2>
           </div>
           <button
             type="button"
@@ -730,13 +873,54 @@ export function CheckoutForm({
           <span
             className={cn(
               "rounded-full px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em]",
-              pickupAddress && dropoffAddress && pickupAddress === dropoffAddress
+              useSameDropoff
                 ? "bg-[#eaf5ff] text-[#2f8ecf]"
                 : "bg-[#eef7ef] text-[#2e8a49]",
             )}
           >
-            {pickupAddress && dropoffAddress && pickupAddress === dropoffAddress ? "Same pickup and delivery" : "Different pickup and delivery"}
+            {useSameDropoff ? "Same pickup and delivery" : "Different pickup and delivery"}
           </span>
+        </div>
+
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setUseSameDropoff(true);
+              setDropoffAddress(pickupAddress);
+              setDropoffLat(pickupLat);
+              setDropoffLng(pickupLng);
+              setDropoffAddressValid(pickupAddressValid);
+            }}
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-[0.72rem] font-black uppercase tracking-[0.08em] transition",
+              useSameDropoff
+                ? "border-[#2f8ecf] bg-[#2f8ecf] text-white"
+                : "border-[#cbe1f1] bg-white text-[#5d8cb0] hover:border-[#9fcae8]",
+            )}
+          >
+            Same address
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setUseSameDropoff(false);
+              if (dropoffAddress.trim().length === 0) {
+                setDropoffAddress("");
+                setDropoffLat(null);
+                setDropoffLng(null);
+                setDropoffAddressValid(false);
+              }
+            }}
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-[0.72rem] font-black uppercase tracking-[0.08em] transition",
+              !useSameDropoff
+                ? "border-[#2e8a49] bg-[#2e8a49] text-white"
+                : "border-[#cbe1f1] bg-white text-[#5d8cb0] hover:border-[#9fcae8]",
+            )}
+          >
+            Different delivery
+          </button>
         </div>
 
         <div className="space-y-2">
@@ -763,13 +947,15 @@ export function CheckoutForm({
                   type="button"
                   onClick={() => {
                     setPickupAddress(address);
-                    setDropoffAddress(address);
                     setPickupLat(null);
                     setPickupLng(null);
-                    setDropoffLat(null);
-                    setDropoffLng(null);
                     setPickupAddressValid(true);
-                    setDropoffAddressValid(true);
+                    if (useSameDropoff) {
+                      setDropoffAddress(address);
+                      setDropoffLat(null);
+                      setDropoffLng(null);
+                      setDropoffAddressValid(true);
+                    }
                     setAddressMenuOpen(false);
                   }}
                   className="w-full rounded-[0.7rem] border border-[#d2e6f5] bg-white px-3 py-2 text-left text-[0.78rem] font-semibold text-[#2f5878] transition hover:border-[#9fcae8]"
@@ -816,25 +1002,31 @@ export function CheckoutForm({
               <span className="text-xs text-red-500">Select a pickup suggestion so we can calculate an accurate route.</span>
             )}
 
-            <AddressAutocomplete
-              label="Drop-off Address"
-              name="dropoffAddress"
-              placeholder="Delivery return address"
-              value={dropoffAddress}
-              onValueChange={(val) => {
-                setDropoffAddress(val);
-                setDropoffLat(null);
-                setDropoffLng(null);
-                setDropoffAddressValid(false);
-              }}
-              onCoordinateSelect={(coordinates) => {
-                setDropoffLat(coordinates?.lat ?? null);
-                setDropoffLng(coordinates?.lng ?? null);
-                setDropoffAddressValid(!!coordinates && typeof coordinates.lat === "number" && typeof coordinates.lng === "number");
-              }}
-            />
-            {!dropoffAddressValid && (
-              <span className="text-xs text-red-500">Select a drop-off suggestion so we can calculate an accurate route.</span>
+            {!useSameDropoff ? (
+              <>
+                <AddressAutocomplete
+                  label="Drop-off Address"
+                  name="dropoffAddress"
+                  placeholder="Delivery return address"
+                  value={dropoffAddress}
+                  onValueChange={(val) => {
+                    setDropoffAddress(val);
+                    setDropoffLat(null);
+                    setDropoffLng(null);
+                    setDropoffAddressValid(false);
+                  }}
+                  onCoordinateSelect={(coordinates) => {
+                    setDropoffLat(coordinates?.lat ?? null);
+                    setDropoffLng(coordinates?.lng ?? null);
+                    setDropoffAddressValid(!!coordinates && typeof coordinates.lat === "number" && typeof coordinates.lng === "number");
+                  }}
+                />
+                {!dropoffAddressValid && (
+                  <span className="text-xs text-red-500">Select a drop-off suggestion so we can calculate an accurate route.</span>
+                )}
+              </>
+            ) : (
+              <p className="text-xs font-semibold text-[#6d90aa]">Drop-off will use your pickup address for this booking.</p>
             )}
           </div>
         ) : null}
@@ -886,46 +1078,27 @@ export function CheckoutForm({
         <div className="mb-2 flex items-center justify-between gap-3">
           <div>
             <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Instructions</p>
-            <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Additional Instructions</h2>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAdditionalInstructions((current) => !current)}
-            className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.74rem] font-black text-[#2f8ecf]"
-            aria-expanded={showAdditionalInstructions}
-            aria-controls="additional-instructions-panel"
-          >
-            {showAdditionalInstructions ? "Hide" : "Add"}
-          </button>
         </div>
 
-        {showAdditionalInstructions ? (
-          <div id="additional-instructions-panel" className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-xs font-semibold text-text-secondary">
-              Delivery instructions
-              <textarea
-                name="deliveryInstructions"
-                value={deliveryInstructions}
-                onChange={(event) => setDeliveryInstructions(event.target.value)}
-                placeholder="Gate code, landmark, who can receive the order"
-                className="mt-2 min-h-[96px] w-full rounded-[1rem] border border-[#cae4f8] bg-[#f9fdff] px-3 py-3 text-sm font-medium text-[#0d4b78] outline-none"
-              />
-            </label>
-
-            <label className="block text-xs font-semibold text-text-secondary">
-              Additional instructions for rider
-              <textarea
-                name="riderNotes"
-                value={riderNotes}
-                onChange={(event) => setRiderNotes(event.target.value)}
-                placeholder="Fragile items, parking instructions, preferred call before arrival"
-                className="mt-2 min-h-[96px] w-full rounded-[1rem] border border-[#cae4f8] bg-[#f9fdff] px-3 py-3 text-sm font-medium text-[#0d4b78] outline-none"
-              />
-            </label>
+        <div className="grid gap-3">
+          <div className="block text-xs font-semibold text-text-secondary">
+            <textarea
+              name="deliveryInstructions"
+              rows={1}
+              value={deliveryInstructions || riderNotes}
+              onChange={(event) => {
+                const value = event.target.value;
+                event.currentTarget.style.height = "auto";
+                event.currentTarget.style.height = `${event.currentTarget.scrollHeight}px`;
+                setDeliveryInstructions(value);
+                setRiderNotes(value);
+              }}
+              placeholder="Gate code, landmark, parking, call preference"
+              className="mt-2 w-full resize-none overflow-hidden rounded-[1rem] border border-[#cae4f8] bg-[#f9fdff] px-3 py-2 text-sm font-medium text-[#0d4b78] outline-none"
+            />
           </div>
-        ) : (
-          <p className="text-[0.82rem] font-semibold text-[#6d90aa]">Add notes for delivery handling, access details, or rider reminders.</p>
-        )}
+        </div>
       </section>
 
       <section className="rounded-[1.2rem] border border-[#c7d9e8] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
@@ -933,6 +1106,10 @@ export function CheckoutForm({
           <h2 className="text-[0.98rem] font-black text-[#2f5878]">Price breakdown</h2>
           <span className="text-[0.78rem] font-bold text-[#7a98ae]">#{selectedShop.id.slice(0, 6).toUpperCase()}</span>
         </div>
+        <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#edf7ff] px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-[#1f8fd6]">
+          <FlaticonIcon name="badge-check" className="text-[0.72rem]" />
+          Price lock at confirmation
+        </p>
         <p className="mt-1 text-[0.78rem] font-semibold text-[#6d90aa]">
           {bucketEstimates.length > 0
             ? `${totalLoads} x ${bucketEstimates[0]?.service.name}${bucketEstimates.length > 1 ? ` +${bucketEstimates.length - 1} more` : ""}`
@@ -1021,6 +1198,13 @@ export function CheckoutForm({
         onPaymentMethodChange={setPaymentMethod}
         formatPaymentMethodLabel={formatPaymentMethodLabel}
         formatPaymentMethodHint={formatPaymentMethodHint}
+        savedPaymentPreferences={initialPaymentPreferences.map((preference) => ({
+          id: preference.id,
+          method: preference.method,
+          displayLabel: preference.display_label,
+          maskedReference: preference.masked_reference,
+          isDefault: preference.is_default,
+        }))}
       />
 
       <section className="rounded-[1.2rem] border border-[#d5e3ee] bg-white p-4 shadow-[0_8px_18px_rgba(92,128,160,0.12)]">
@@ -1029,58 +1213,45 @@ export function CheckoutForm({
             <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#7aaed3]">Tip</p>
             <h2 className="mt-1 text-lg font-black text-[#2c4f74]">Tip your rider</h2>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowTipOptions((current) => !current)}
-            className="rounded-full bg-[#edf7ff] px-3 py-1 text-[0.74rem] font-black text-[#2f8ecf]"
-            aria-expanded={showTipOptions}
-            aria-controls="tip-options-panel"
-          >
-            {showTipOptions ? "Hide" : "Edit"}
-          </button>
         </div>
 
-        {showTipOptions ? (
-          <div id="tip-options-panel" className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {[0, 5, 20, 40, 80].map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => {
-                    setTipAmount(option);
-                    setCustomTip("");
-                  }}
-                  className={cn(
-                    "rounded-full border px-3 py-1.5 text-[0.76rem] font-black transition",
-                    tipAmount === option && customTip === ""
-                      ? "border-[#2f8ecf] bg-[#2f8ecf] text-white"
-                      : "border-[#d8e5ef] bg-[#f6fbff] text-[#4f6d84]",
-                  )}
-                >
-                  {option === 0 ? "No Tip" : formatCurrency(option)}
-                </button>
-              ))}
-            </div>
-
-            <label className="block text-xs font-semibold text-text-secondary">
-              Custom tip
-              <Input
-                value={customTip}
-                onChange={(event) => {
-                  const nextValue = event.target.value.replace(/[^0-9.]/g, "");
-                  setCustomTip(nextValue);
-                  setTipAmount(Number(nextValue || 0));
+        <div id="tip-options-panel" className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {[0, 5, 20, 40, 80].map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  setTipAmount(option);
+                  setCustomTip("");
                 }}
-                placeholder="0.00"
-                inputMode="decimal"
-                className="mt-2 h-11 rounded-[0.9rem] border-[#d8e5ef] bg-[#f8fcff]"
-              />
-            </label>
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-[0.76rem] font-black transition",
+                  tipAmount === option && customTip === ""
+                    ? "border-[#2f8ecf] bg-[#2f8ecf] text-white"
+                    : "border-[#d8e5ef] bg-[#f6fbff] text-[#4f6d84]",
+                )}
+              >
+                {option === 0 ? "No Tip" : formatCurrency(option)}
+              </button>
+            ))}
           </div>
-        ) : (
-          <p className="text-[0.82rem] font-semibold text-[#6d90aa]">Current tip: {formatCurrency(tipAmount)}</p>
-        )}
+
+          <label className="block text-xs font-semibold text-text-secondary">
+            Custom tip
+            <Input
+              value={customTip}
+              onChange={(event) => {
+                const nextValue = event.target.value.replace(/[^0-9.]/g, "");
+                setCustomTip(nextValue);
+                setTipAmount(Number(nextValue || 0));
+              }}
+              placeholder="0.00"
+              inputMode="decimal"
+              className="mt-2 h-11 rounded-[0.9rem] border-[#d8e5ef] bg-[#f8fcff]"
+            />
+          </label>
+        </div>
       </section>
 
       {isSummaryOpen ? (
@@ -1181,6 +1352,7 @@ export function CheckoutForm({
 
       <CheckoutSubmitButton
         disabled={!isCheckoutReady}
+        isSubmitting={isSubmitting}
         total={total}
         onSeeSummary={() => setIsSummaryOpen(true)}
       />
@@ -1190,15 +1362,15 @@ export function CheckoutForm({
 
 function CheckoutSubmitButton({
   disabled,
+  isSubmitting,
   total,
   onSeeSummary,
 }: {
   disabled: boolean;
+  isSubmitting: boolean;
   total: number;
   onSeeSummary: () => void;
 }) {
-  const { pending } = useFormStatus();
-
   return (
     <div className="fixed left-0 right-0 bottom-0 z-30 pointer-events-none">
       <div className="pointer-events-auto w-full bg-gradient-to-b from-[#eaf5ff] to-[#d6eafd] shadow-[0_-8px_32px_0_rgba(33,126,191,0.18),0_-1.5px_0_0_#c7d9e8] pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col items-stretch">
@@ -1224,9 +1396,9 @@ function CheckoutSubmitButton({
             "mx-4 flex h-12 items-center justify-center rounded-full bg-[#43a9eb] px-8 text-center text-[1.2rem] font-bold leading-none text-white shadow-[0_12px_26px_rgba(33,126,191,0.35)] transition hover:bg-[#389fdf]",
             disabled && "opacity-70",
           )}
-          disabled={disabled || pending}
+          disabled={disabled || isSubmitting}
         >
-          {pending ? "Booking..." : "Confirm Booking"}
+          {isSubmitting ? "Booking..." : "Confirm Booking"}
         </Button>
       </div>
     </div>
@@ -1295,50 +1467,104 @@ const TIME_SLOTS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00
 const HIGH_DEMAND_SLOTS = new Set(["11:00", "12:00", "17:00", "18:00"]);
 const LIMITED_SLOTS = new Set(["08:00", "16:00"]);
 
-function DateChipPicker({
+function ScheduleCalendarPanel({
   value,
+  minimumDateTime,
   onChange,
 }: {
   value: string;
+  minimumDateTime: string;
   onChange: (value: string) => void;
 }) {
-  const today = startOfDay(new Date());
-  const chips = Array.from({ length: 16 }, (_, index) => {
-    const date = addDays(today, index);
+  const parsedSelectedDate = parseInputDate(value) ?? startOfDay(new Date());
+  const [displayMonth, setDisplayMonth] = useState(
+    () => startOfDay(new Date(parsedSelectedDate.getFullYear(), parsedSelectedDate.getMonth(), 1)),
+  );
+  const minDate = startOfDay(new Date(minimumDateTime));
+
+  const monthLabel = displayMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const monthStart = startOfDay(new Date(displayMonth.getFullYear(), displayMonth.getMonth(), 1));
+  const mondayIndex = (monthStart.getDay() + 6) % 7;
+  const gridStart = addDays(monthStart, -mondayIndex);
+  const dayCells = Array.from({ length: 42 }, (_, index) => {
+    const date = addDays(gridStart, index);
+    const key = toInputDate(date);
+    const isCurrentMonth = date.getMonth() === displayMonth.getMonth();
+    const isSelected = key === value;
+    const isDisabled = date.getTime() < minDate.getTime();
+
     return {
-      key: toInputDate(date),
-      dayLabel: date.toLocaleDateString("en-US", { weekday: "short" }),
-      dateLabel: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      key,
+      date,
+      label: date.getDate(),
+      isCurrentMonth,
+      isSelected,
+      isDisabled,
     };
   });
 
   return (
-    <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-      {chips.map((chip) => {
-        const isActive = chip.key === value;
+    <div>
+      <div className="flex items-center justify-between gap-3 pb-2">
+        <button
+          type="button"
+          onClick={() => setDisplayMonth((current) => startOfDay(new Date(current.getFullYear(), current.getMonth() - 1, 1)))}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#2f8ecf] hover:bg-[#edf7ff]"
+          aria-label="Previous month"
+        >
+          <FlaticonIcon name="angle-small-left" className="text-lg" />
+        </button>
+        <p className="text-base font-black text-[#2c4f74]">{monthLabel}</p>
+        <button
+          type="button"
+          onClick={() => setDisplayMonth((current) => startOfDay(new Date(current.getFullYear(), current.getMonth() + 1, 1)))}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#2f8ecf] hover:bg-[#edf7ff]"
+          aria-label="Next month"
+        >
+          <FlaticonIcon name="angle-small-right" className="text-lg" />
+        </button>
+      </div>
 
-        return (
-          <button
-            key={chip.key}
-            type="button"
-            onClick={() => onChange(chip.key)}
-            className={cn(
-              "shrink-0 rounded-[0.75rem] border px-2.5 py-2 text-left transition",
-              isActive
-                ? "border-[#2f8ecf] bg-[#2f8ecf] text-white"
-                : "border-[#c8def0] bg-white text-[#2f5878] hover:border-[#94c4e4]",
-            )}
-          >
-            <p className="text-[0.66rem] font-black uppercase tracking-[0.08em]">{chip.dayLabel}</p>
-            <p className="text-[0.75rem] font-bold">{chip.dateLabel}</p>
-          </button>
-        );
-      })}
+      <div className="grid grid-cols-7 gap-1 pb-2 text-center text-[0.78rem] font-bold text-[#6d90aa]">
+        {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((label) => (
+          <span key={label}>{label}</span>
+        ))}
+      </div>
+
+      <div className="space-y-1">
+        {Array.from({ length: 6 }, (_, week) => {
+          const weekCells = dayCells.slice(week * 7, week * 7 + 7);
+          return (
+            <div key={`week-${week}`} className="grid grid-cols-7 gap-1 rounded-full bg-[#edf7ff] px-1 py-1">
+              {weekCells.map((cell) => (
+                <button
+                  key={cell.key}
+                  type="button"
+                  onClick={() => {
+                    if (cell.isDisabled) return;
+                    onChange(cell.key);
+                  }}
+                  disabled={cell.isDisabled}
+                  className={cn(
+                    "mx-auto inline-flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition",
+                    cell.isSelected && "bg-[#2f8ecf] text-white",
+                    !cell.isSelected && cell.isCurrentMonth && "text-[#2f5878] hover:bg-white",
+                    !cell.isSelected && !cell.isCurrentMonth && "text-[#9ca3af]",
+                    cell.isDisabled && "cursor-not-allowed text-[#d1d5db] hover:bg-transparent",
+                  )}
+                >
+                  {cell.label}
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function TimeSlotPicker({
+function ScheduleTimePanel({
   dateValue,
   value,
   minimumDateTime,
@@ -1350,7 +1576,7 @@ function TimeSlotPicker({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+    <div className="mt-3 grid grid-cols-3 gap-2">
       {TIME_SLOTS.map((slot) => {
         const isActive = slot === value;
         const isDisabled = isSlotUnavailable(dateValue, slot, minimumDateTime);
@@ -1366,10 +1592,10 @@ function TimeSlotPicker({
             }}
             disabled={isDisabled}
             className={cn(
-              "shrink-0 rounded-[0.85rem] border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f8ecf]",
-              isDisabled && "cursor-not-allowed border-[#dce8f2] bg-[#f4f8fc] text-[#9eb4c4]",
-              !isDisabled && isActive && "border-[#218ed2] bg-[#218ed2] text-white",
-              !isDisabled && !isActive && "border-[#a9d2ef] bg-white text-[#2f8ecf] hover:border-[#8bc2e7]",
+              "rounded-[0.85rem] border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f8ecf]",
+              isDisabled && "cursor-not-allowed border-[#e2e8f0] bg-[#f8fafc] text-[#94a3b8]",
+              !isDisabled && isActive && "border-[#2f8ecf] bg-[#2f8ecf] text-white",
+              !isDisabled && !isActive && "border-[#c7d9e8] bg-white text-[#2f5878] hover:border-[#9fcae8]",
             )}
           >
             <p className="text-[0.76rem] font-black">{formatSlotTime(slot)}</p>
@@ -1426,6 +1652,31 @@ function toInputDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function parseInputDate(value: string) {
+  if (!value) return null;
+
+  const parsed = new Date(`${value}T00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return startOfDay(parsed);
+}
+
+function formatScheduleDateTime(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Not set";
+  }
+
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function isSlotUnavailable(dateValue: string, slot: string, minimumDateTime: string) {
@@ -1646,6 +1897,7 @@ function readCheckoutDraft(
   selectedOptionIdsByService?: Record<string, string[]>;
   tipAmount?: number;
   customTip?: string;
+  useSameDropoff?: boolean;
 } | null {
   if (!shopId || !serviceId || typeof window === "undefined") return null;
 
@@ -1666,6 +1918,7 @@ function readCheckoutDraft(
       selectedOptionIdsByService?: Record<string, string[]>;
       tipAmount?: number;
       customTip?: string;
+      useSameDropoff?: boolean;
     };
   } catch {
     return null;
